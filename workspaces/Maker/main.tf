@@ -477,7 +477,12 @@ GENMKS
   "plugin": [
     "opencode-openai-codex-auth@4.0.2",
     "opencode-gemini-auth@latest",
-    "opencode-antigravity-auth@beta"
+    "opencode-antigravity-auth@beta",
+    "opencode-agent-memory",
+    "opencode-dynamic-context-pruning",
+    "opencode-mystatus",
+    "opencode-handoff",
+    "opencode-background-agents"
   ],
   "provider": {
     "openai": {
