@@ -167,7 +167,7 @@ RUN set -e; \
 ARG GITHUB_DESKTOP_REPO=shiftkey/desktop
 ARG CLAUDE_DESKTOP_REPO=aaddrick/claude-desktop-debian
 RUN set -e; \
-    GH_DESKTOP_URL="$(python3 - <<'PY' "$GITHUB_DESKTOP_REPO"
+    GH_DESKTOP_URL="$(python3 - "$GITHUB_DESKTOP_REPO" <<'PY'
 import json
 import re
 import sys
@@ -187,7 +187,7 @@ else:
     raise SystemExit("No GitHub Desktop .deb asset found")
 PY
 )"; \
-    CLAUDE_URL="$(python3 - <<'PY' "$CLAUDE_DESKTOP_REPO"
+    CLAUDE_URL="$(python3 - "$CLAUDE_DESKTOP_REPO" <<'PY'
 import json
 import re
 import sys
