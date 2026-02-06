@@ -987,6 +987,69 @@ resource "coder_script" "setup_pipx" {
   start_blocks_login = false
 }
 
+# Script para crear venv y kernel por defecto de JupyterLab
+resource "coder_script" "setup_jupyter_kernel" {
+  agent_id           = coder_agent.main.id
+  display_name       = "Setup Jupyter kernel"
+  icon               = "/icon/folder.svg"
+  script             = <<-EOT
+    #!/bin/bash
+    set -e
+
+    VENV_DIR="$HOME/.venvs/jupyter"
+    KERNEL_NAME="coder-py"
+    DISPLAY_NAME="Python (coder)"
+
+    if [ ! -d "$VENV_DIR" ]; then
+      python3 -m venv "$VENV_DIR"
+    fi
+
+    "$VENV_DIR/bin/python" -m pip install --upgrade pip
+    "$VENV_DIR/bin/python" -m pip install --upgrade ipykernel
+    "$VENV_DIR/bin/python" -m ipykernel install --user --name "$KERNEL_NAME" --display-name "$DISPLAY_NAME"
+
+    python3 - <<'PY'
+from pathlib import Path
+
+config = Path.home() / ".jupyter" / "jupyter_server_config.py"
+config.parent.mkdir(parents=True, exist_ok=True)
+
+block = """# >>> coder-managed-kernel
+try:
+    c
+except NameError:
+    c = get_config()
+
+c.MappingKernelManager.default_kernel_name = "coder-py"
+try:
+    c.MultiKernelManager.default_kernel_name = "coder-py"
+except Exception:
+    pass
+# <<< coder-managed-kernel
+"""
+
+text = config.read_text() if config.exists() else ""
+start = text.find("# >>> coder-managed-kernel")
+end = text.find("# <<< coder-managed-kernel")
+
+if start != -1 and end != -1 and end > start:
+    end += len("# <<< coder-managed-kernel")
+    new = text[:start] + block + text[end:]
+else:
+    new = text.rstrip()
+    if new:
+        new += "\n\n"
+    new += block + "\n"
+
+config.write_text(new)
+PY
+
+    echo "✓ Jupyter kernel '$KERNEL_NAME' ready"
+  EOT
+  run_on_start       = true
+  start_blocks_login = false
+}
+
 module "code-server" {
   count      = data.coder_workspace.me.start_count
   source     = "registry.coder.com/coder/code-server/coder"
@@ -1092,7 +1155,7 @@ module "jupyterlab" {
   source     = "registry.coder.com/coder/jupyterlab/coder"
   version    = "~> 1.2"
   agent_id   = coder_agent.main.id
-  depends_on = [coder_script.setup_pipx]
+  depends_on = [coder_script.setup_pipx, coder_script.setup_jupyter_kernel]
 }
 
 resource "coder_ai_task" "opencode_task" {
