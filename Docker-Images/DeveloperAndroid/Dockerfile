@@ -2,7 +2,7 @@
 FROM ghcr.io/makespacemadrid/coder-mks-desktop-kde:latest
 
 LABEL org.opencontainers.image.title="coder-mks-developer-android" \
-      org.opencontainers.image.description="Coder Desktop KDE con toolchain Android (SDK/CLI), Node 20 y VS Code" \
+      org.opencontainers.image.description="Coder Desktop KDE con toolchain Android (SDK/CLI), Node 22 y VS Code" \
       org.opencontainers.image.source="https://github.com/makespacemadrid/coder-workspaces" \
       org.opencontainers.image.url="ghcr.io/makespacemadrid/coder-mks-developer-android:latest" \
       com.centurylinklabs.watchtower.enable="true" \
@@ -100,10 +100,10 @@ RUN if [ -x /usr/bin/startplasma-x11 ] && [ ! -x /usr/bin/startkde ]; then \
 # Disable KDE screen locker/screensaver
 RUN printf '[Daemon]\nTimeout=0\nLockOnResume=false\nLockOnSuspend=false\nAutolock=false\n' > /etc/xdg/kscreenlockerrc
 
-# Node.js 20 + package managers (para React Native/JS tooling)
+# Node.js 22 LTS + package managers (para React Native/JS tooling)
 RUN install -m 0755 -d /etc/apt/keyrings && \
     curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg && \
-    echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x nodistro main" \
+    echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_22.x nodistro main" \
       | tee /etc/apt/sources.list.d/nodesource.list > /dev/null && \
     apt-get update && \
     apt-get install -y --no-install-recommends nodejs && \
@@ -132,9 +132,9 @@ RUN install -m 0755 -d /etc/apt/keyrings && \
 ENV ANDROID_HOME=/opt/android-sdk \
     ANDROID_SDK_ROOT=/opt/android-sdk \
     ANDROID_USER_HOME=/home/coder/.android \
-    PATH=$PATH:/opt/android-sdk/platform-tools:/opt/android-sdk/cmdline-tools/latest/bin:/opt/android-sdk/emulator:/opt/gradle/gradle-9.3.0/bin
+    PATH=$PATH:/opt/android-sdk/platform-tools:/opt/android-sdk/cmdline-tools/latest/bin:/opt/android-sdk/emulator:/opt/gradle/gradle-9.3.1/bin
 
-ARG ANDROID_SDK_VERSION=13114758
+ARG ANDROID_SDK_VERSION=14742923
 RUN mkdir -p /opt/android-sdk/cmdline-tools && \
     curl -fsSL "https://dl.google.com/android/repository/commandlinetools-linux-${ANDROID_SDK_VERSION}_latest.zip" -o /tmp/cmdline-tools.zip && \
     unzip -q /tmp/cmdline-tools.zip -d /opt/android-sdk/cmdline-tools && \
@@ -186,7 +186,7 @@ RUN chmod +x /usr/share/applications/android-studio.desktop && \
     done
 
 # Gradle
-RUN curl -fsSL "https://services.gradle.org/distributions/gradle-9.3.0-bin.zip" -o /tmp/gradle.zip && \
+RUN curl -fsSL "https://services.gradle.org/distributions/gradle-9.3.1-bin.zip" -o /tmp/gradle.zip && \
     unzip -q /tmp/gradle.zip -d /opt/gradle && \
     rm /tmp/gradle.zip
 

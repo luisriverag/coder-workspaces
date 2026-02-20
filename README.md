@@ -3,8 +3,8 @@
 Imágenes Docker y templates de Coder para workspaces de desarrollo y diseño en MakeSpace Madrid.
 
 ## Imágenes
-- `ghcr.io/makespacemadrid/coder-mks-developer:latest` (Docker-Images/Developer): escritorio XFCE/KasmVNC, Docker, Node.js 20, CLIs de IA (Codex, Claude, Gemini, Continue, Qwen), VS Code, GitHub Desktop, Claude Desktop, AppImage Pool, Geany y audio (PulseAudio/ALSA).
-- `ghcr.io/makespacemadrid/coder-mks-developer-android:latest` (Docker-Images/DeveloperAndroid): escritorio KDE/KasmVNC, toolchain Android (SDK/CLI), Node.js 20, VS Code, JetBrains Toolbox y utilidades Android (adb/scrcpy).
+- `ghcr.io/makespacemadrid/coder-mks-developer:latest` (Docker-Images/Developer): escritorio XFCE/KasmVNC, Docker, Node.js 22, CLIs de IA (Codex, Claude, Gemini, Continue, Qwen), VS Code, GitHub Desktop, Claude Desktop, AppImage Pool, Geany y audio (PulseAudio/ALSA).
+- `ghcr.io/makespacemadrid/coder-mks-developer-android:latest` (Docker-Images/DeveloperAndroid): escritorio KDE/KasmVNC, toolchain Android (SDK/CLI), Node.js 22, VS Code, JetBrains Toolbox y utilidades Android (adb/scrcpy).
 - `ghcr.io/makespacemadrid/coder-mks-design:latest` (Docker-Images/Designer): suite de diseño 2D/3D y electrónica (Inkscape, GIMP, Krita, Blender, FreeCAD, OpenSCAD, PrusaSlicer, MeshLab, LibreCAD, KiCad, Fritzing, SimulIDE, LaserGRBL via Wine), ImageMagick, FFmpeg, ExifTool, Pandoc, FontForge, AppImage Pool y Geany.
 
 Build local:
