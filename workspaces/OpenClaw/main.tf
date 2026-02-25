@@ -9,6 +9,9 @@ terraform {
     null = {
       source = "hashicorp/null"
     }
+    random = {
+      source = "hashicorp/random"
+    }
   }
 }
 
@@ -131,30 +134,12 @@ data "coder_parameter" "autoprovision_mks_key" {
   mutable      = true
 }
 
-data "coder_parameter" "claude_token" {
-  name         = "04_claude_token"
-  display_name = "[AI/Claude] Token"
-  description  = "Token de Claude (oauth). Si se rellena se usa Claude y se omite el módulo OpenCode. Obténlo con `claude setup-token`."
-  type         = "string"
-  default      = ""
-  mutable      = true
-}
-
 data "coder_parameter" "openclaw_autostart" {
   name         = "05_openclaw_autostart"
   display_name = "[OpenClaw] Auto-iniciar servicio"
   description  = "Intenta arrancar OpenClaw al iniciar el workspace (sin fallar si no esta instalado)."
   type         = "bool"
   default      = true
-  mutable      = true
-}
-
-data "coder_parameter" "openclaw_onboard_install_daemon" {
-  name         = "05_openclaw_onboard_install_daemon"
-  display_name = "[OpenClaw] Onboard --install-daemon"
-  description  = "Tras instalar OpenClaw, intenta ejecutar `openclaw onboard --install-daemon` en modo no interactivo (best-effort)."
-  type         = "bool"
-  default      = false
   mutable      = true
 }
 
@@ -173,42 +158,6 @@ data "coder_parameter" "openclaw_workdir" {
   description  = "Directorio desde el que se ejecuta OpenClaw."
   type         = "string"
   default      = "/home/coder/Projects"
-  mutable      = true
-}
-
-data "coder_parameter" "openclaw_command" {
-  name         = "05_openclaw_command"
-  display_name = "[OpenClaw] Comando de arranque"
-  description  = "Comando shell para arrancar OpenClaw (por defecto ejecuta `openclaw gateway run`). Si se deja vacío, no se autoarranca ni se crea la app UI."
-  type         = "string"
-  default      = "OPENCLAW_GATEWAY_TOKEN=\"$${OPENCLAW_GATEWAY_TOKEN:-coder-openclaw-token}\" openclaw gateway run --allow-unconfigured --port \"$${OPENCLAW_PORT:-3333}\" --auth token --token \"$${OPENCLAW_GATEWAY_TOKEN}\""
-  mutable      = true
-}
-
-data "coder_parameter" "openclaw_ui_path" {
-  name         = "05_openclaw_ui_path"
-  display_name = "[OpenClaw] UI path"
-  description  = "Ruta HTTP para abrir la UI en el app de Coder."
-  type         = "string"
-  default      = "/"
-  mutable      = true
-}
-
-data "coder_parameter" "openclaw_health_path" {
-  name         = "05_openclaw_health_path"
-  display_name = "[OpenClaw] Health path"
-  description  = "Ruta HTTP para healthcheck del app OpenClaw UI."
-  type         = "string"
-  default      = "/"
-  mutable      = true
-}
-
-data "coder_parameter" "vscode_extensions" {
-  name         = "06_vscode_extensions"
-  display_name = "[Code] Extensiones VS Code (preinstalar)"
-  description  = "Lista separada por comas de extensiones a preinstalar en VS Code/code-server."
-  type         = "string"
-  default      = join(", ", local.vscode_extensions_default)
   mutable      = true
 }
 
@@ -231,28 +180,16 @@ locals {
   openai_base_url            = trimspace(data.coder_parameter.opencode_provider_url.value)
   openai_api_key             = trimspace(data.coder_parameter.opencode_api_key.value)
   auto_provision_mks_key     = data.coder_parameter.autoprovision_mks_key.value
-  claude_token               = trimspace(data.coder_parameter.claude_token.value)
-  install_claude             = local.claude_token != ""
   openclaw_autostart         = data.coder_parameter.openclaw_autostart.value
-  openclaw_onboard_daemon    = data.coder_parameter.openclaw_onboard_install_daemon.value
   openclaw_port              = data.coder_parameter.openclaw_port.value
+  openclaw_gateway_token     = random_password.openclaw_gateway_token.result
   openclaw_workdir           = trimspace(data.coder_parameter.openclaw_workdir.value)
-  openclaw_command           = trimspace(data.coder_parameter.openclaw_command.value)
-  openclaw_enabled           = trimspace(data.coder_parameter.openclaw_command.value) != ""
-  openclaw_ui_path           = trimspace(data.coder_parameter.openclaw_ui_path.value) != "" ? trimspace(data.coder_parameter.openclaw_ui_path.value) : "/"
-  openclaw_health_path       = trimspace(data.coder_parameter.openclaw_health_path.value) != "" ? trimspace(data.coder_parameter.openclaw_health_path.value) : "/"
-  vscode_extensions_default = [
-    "coder.coder-remote",
-    "openai.chatgpt",
-    "Anthropic.claude-code",
-    "Continue.continue"
-  ]
-  vscode_extensions_input = trimspace(data.coder_parameter.vscode_extensions.value)
-  vscode_extensions = local.vscode_extensions_input != "" ? [
-    for ext in split(",", local.vscode_extensions_input) : trimspace(ext)
-    if trimspace(ext) != ""
-  ] : local.vscode_extensions_default
-  continue_default_config = file("${path.module}/continue-config.yaml")
+  openclaw_workdir_resolved  = local.openclaw_workdir != "" ? local.openclaw_workdir : "/home/coder/Projects"
+}
+
+resource "random_password" "openclaw_gateway_token" {
+  length  = 48
+  special = false
 }
 
 provider "docker" {
@@ -327,21 +264,8 @@ PULSECFG
       echo 'fi' >> /home/coder/.profile
     fi
 
-    # Solo configurar OpenCode si NO se está usando Claude Code
-    if [ "${tostring(local.install_claude)}" = "false" ]; then
-      # Symlink de opencode cuando se instale bajo /root
-      if [ -d /root/.opencode ] && [ ! -e /home/coder/.opencode ]; then
-        sudo ln -s /root/.opencode /home/coder/.opencode || true
-      fi
-      # Añadir OpenCode CLI al PATH
-      if ! grep -q "/.opencode/bin" /home/coder/.profile 2>/dev/null; then
-        echo 'export PATH="$HOME/.opencode/bin:$HOME/.local/bin:$PATH"' >> /home/coder/.profile
-      fi
-    else
-      # Si usamos Claude Code, solo añadir .local/bin al PATH
-      if ! grep -q "/.local/bin" /home/coder/.profile 2>/dev/null; then
-        echo 'export PATH="$HOME/.local/bin:$PATH"' >> /home/coder/.profile
-      fi
+    if ! grep -q "/.local/bin" /home/coder/.profile 2>/dev/null; then
+      echo 'export PATH="$HOME/.local/bin:$PATH"' >> /home/coder/.profile
     fi
 
     mkdir -p ~/Projects
@@ -366,16 +290,6 @@ for path in paths:
     with open(path, "w") as f:
         json.dump(data, f, indent=2)
 PY
-    if [ ! -f "$HOME/Projects/.vscode/extensions.json" ]; then
-      mkdir -p "$HOME/Projects/.vscode"
-      cat > "$HOME/Projects/.vscode/extensions.json" <<'VSCODEEXT'
-{
-  "recommendations": [
-${join(",\n", formatlist("    \"%s\"", local.vscode_extensions))}
-  ]
-}
-VSCODEEXT
-    fi
     mkdir -p ~/.opencode ~/.config/opencode
     if [ ! -f ~/.opencode/opencode.json ]; then
       cat > ~/.opencode/opencode.json <<'JSONCFG'
@@ -456,19 +370,6 @@ JSONCFG
       fi
       if ! grep -q "OPENCODE_API_KEY=" ~/.bashrc 2>/dev/null; then
         echo "export OPENCODE_API_KEY=\"$OPENCODE_API_KEY\"" >> ~/.bashrc
-      fi
-    fi
-
-    # Configuración de Continue solo cuando la key OpenAI se autoprovisiona
-    if printf '%s' "$${AUTO_PROVISION_MKS_API_KEY:-false}" | grep -Eq '^(1|true|TRUE|yes|on)$' \
-      && [ -n "$${MKS_API_KEY:-}" ] && [ -n "$${MKS_BASE_URL:-}" ]; then
-      if [ ! -f ~/.continue/config.yaml ]; then
-        mkdir -p ~/.continue
-        cat > ~/.continue/config.yaml <<'CONTINUECFG'
-${local.continue_default_config}
-CONTINUECFG
-        sed -i "s|MKS_BASE_PLACEHOLDER|$${MKS_BASE_URL}|g" ~/.continue/config.yaml
-        sed -i "s|MKS_API_KEY_PLACEHOLDER|$${MKS_API_KEY}|g" ~/.continue/config.yaml
       fi
     fi
 
@@ -576,12 +477,24 @@ CONTINUECFG
       fi
       export PATH="$HOME/.npm-global/bin:$HOME/.local/bin:$PATH"
     fi
-    if [ "$${OPENCLAW_ONBOARD_INSTALL_DAEMON:-false}" = "true" ] && command -v openclaw >/dev/null 2>&1; then
-      echo ">> Running OpenClaw onboarding with --install-daemon (best-effort)..."
-      if ! openclaw onboard --non-interactive --accept-risk --skip-channels --skip-skills --skip-ui --skip-health --install-daemon; then
-        echo "WARN: onboard --install-daemon no se completó. Continúo con arranque normal." >&2
-      fi
+    # No actualizar OpenClaw automáticamente en startup:
+    # puede tardar mucho y bloquear el arranque del gateway/app.
+    # Si necesitas actualizar, hazlo manualmente con:
+    #   openclaw update --yes --no-restart
+
+    if command -v openclaw >/dev/null 2>&1; then
+      openclaw config set gateway.auth.mode token >/dev/null 2>&1 || true
+      openclaw config set gateway.auth.token "$${OPENCLAW_GATEWAY_TOKEN:-}" >/dev/null 2>&1 || true
     fi
+
+    # Persistir configuración de OpenClaw para invocaciones manuales posteriores
+    mkdir -p "$HOME/.local/state/openclaw"
+    cat > "$HOME/.local/state/openclaw/runtime.env" <<EOF
+OPENCLAW_PORT="$${OPENCLAW_PORT:-3333}"
+OPENCLAW_GATEWAY_TOKEN="$${OPENCLAW_GATEWAY_TOKEN:-}"
+OPENCLAW_WORKDIR="$${OPENCLAW_WORKDIR:-$HOME/Projects}"
+EOF
+    chmod 600 "$HOME/.local/state/openclaw/runtime.env"
 
     # Script de OpenClaw (siempre disponible)
     mkdir -p "$HOME/.local/state/openclaw"
@@ -589,37 +502,63 @@ CONTINUECFG
     cat > "$HOME/.local/bin/start-openclaw" <<'OPENCLAWSTART'
 #!/usr/bin/env bash
 set -euo pipefail
-export OPENCLAW_PORT="$${OPENCLAW_PORT:-3333}"
-export OPENCLAW_WORKDIR="$${OPENCLAW_WORKDIR:-$HOME/Projects}"
-if [ -z "$${OPENCLAW_COMMAND:-}" ]; then
-  echo "OPENCLAW_COMMAND está vacío. Configúralo en parámetros del workspace o exporta OPENCLAW_COMMAND antes de ejecutar este script." >&2
+STATE_DIR="$HOME/.local/state/openclaw"
+ENV_FILE="$STATE_DIR/runtime.env"
+LOG_FILE="$STATE_DIR/openclaw.log"
+PID_FILE="$STATE_DIR/openclaw.pid"
+mkdir -p "$STATE_DIR"
+
+if [ -f "$ENV_FILE" ]; then
+  # Cargar token/puerto/workdir persistidos por el startup script del agente.
+  set -a
+  . "$ENV_FILE"
+  set +a
+fi
+
+OPENCLAW_PORT="$${OPENCLAW_PORT:-3333}"
+OPENCLAW_WORKDIR="$${OPENCLAW_WORKDIR:-$HOME/Projects}"
+
+if [ -z "$${OPENCLAW_GATEWAY_TOKEN:-}" ]; then
+  echo "OPENCLAW_GATEWAY_TOKEN no definido. Rebuild/start del workspace para regenerar la configuración." >&2
   exit 1
 fi
-mkdir -p "$HOME/.local/state/openclaw"
+
+if curl -fsS --max-time 1 "http://127.0.0.1:$OPENCLAW_PORT/" >/dev/null 2>&1; then
+  echo "OpenClaw ya está escuchando en :$OPENCLAW_PORT"
+  exit 0
+fi
+
 cd "$OPENCLAW_WORKDIR" 2>/dev/null || cd "$HOME/Projects"
-nohup bash -lc "$OPENCLAW_COMMAND" >> "$HOME/.local/state/openclaw/openclaw.log" 2>&1 &
-echo $! > "$HOME/.local/state/openclaw/openclaw.pid"
+ulimit -n 65536 >/dev/null 2>&1 || true
+nohup openclaw gateway run --allow-unconfigured --port "$OPENCLAW_PORT" --auth token --token "$OPENCLAW_GATEWAY_TOKEN" >> "$LOG_FILE" 2>&1 &
+echo $! > "$PID_FILE"
+
+for _ in $(seq 1 90); do
+  if curl -fsS --max-time 1 "http://127.0.0.1:$OPENCLAW_PORT/" >/dev/null 2>&1; then
+    exit 0
+  fi
+  sleep 1
+done
+
+echo "OpenClaw no respondió en :$OPENCLAW_PORT tras 90s. Revisa $LOG_FILE" >&2
+exit 1
 OPENCLAWSTART
     chmod +x "$HOME/.local/bin/start-openclaw"
 
-    # OpenClaw opcional: arranque no bloqueante para no romper el workspace
-    if [ "$${OPENCLAW_AUTOSTART:-false}" = "true" ] && [ -n "$${OPENCLAW_COMMAND:-}" ]; then
-      if ! pgrep -f "openclaw|OPENCLAW_PORT=$${OPENCLAW_PORT:-3333}" >/dev/null 2>&1; then
-        if ! "$HOME/.local/bin/start-openclaw"; then
-          echo "WARN: no se pudo arrancar OpenClaw automaticamente. Revisa ~/.local/state/openclaw/openclaw.log" >&2
-        fi
+    # OpenClaw opcional: arranque determinista antes de finalizar startup.
+    if [ "$${OPENCLAW_AUTOSTART:-false}" = "true" ]; then
+      if ! "$HOME/.local/bin/start-openclaw"; then
+        echo "WARN: no se pudo arrancar OpenClaw automáticamente. Revisa ~/.local/state/openclaw/openclaw.log" >&2
       fi
       if command -v openclaw >/dev/null 2>&1; then
-        for _ in $(seq 1 15); do
-          if openclaw health --timeout 2000 >/dev/null 2>&1; then
-            echo ">> OpenClaw health OK"
-            break
-          fi
-          sleep 1
-        done
+        if openclaw health --timeout 3000 >/dev/null 2>&1; then
+          echo ">> OpenClaw health OK"
+        else
+          echo "WARN: openclaw health no respondió tras arranque." >&2
+        fi
       fi
     else
-      echo "INFO: OpenClaw deshabilitado (OPENCLAW_COMMAND vacío o OPENCLAW_AUTOSTART=false)." >&2
+      echo "INFO: OpenClaw autostart deshabilitado (OPENCLAW_AUTOSTART=false)." >&2
     fi
 
   EOT
@@ -637,24 +576,12 @@ OPENCLAWSTART
     MKS_BASE_URL                    = local.openai_base_url
     MKS_API_KEY                     = local.openai_api_key
     AUTO_PROVISION_MKS_API_KEY      = tostring(local.auto_provision_mks_key)
-    INSTALL_CLAUDE                  = tostring(local.install_claude)
     CODER_USER_EMAIL                = data.coder_workspace_owner.me.email
     OPENCLAW_AUTOSTART              = tostring(local.openclaw_autostart)
-    OPENCLAW_ONBOARD_INSTALL_DAEMON = tostring(local.openclaw_onboard_daemon)
     OPENCLAW_PORT                   = tostring(local.openclaw_port)
-    OPENCLAW_WORKDIR                = local.openclaw_workdir
-    OPENCLAW_COMMAND                = local.openclaw_command
+    OPENCLAW_GATEWAY_TOKEN          = local.openclaw_gateway_token
+    OPENCLAW_WORKDIR                = local.openclaw_workdir_resolved
   }
-}
-
-module "code-server" {
-  count      = data.coder_workspace.me.start_count
-  source     = "registry.coder.com/coder/code-server/coder"
-  version    = "~> 1.1"
-  agent_id   = coder_agent.main.id
-  extensions = local.vscode_extensions
-  folder     = "/home/coder/Projects"
-  order      = 1
 }
 
 module "kasmvnc" {
@@ -682,41 +609,19 @@ module "git-clone" {
   base_dir = "~/Projects"
 }
 
-module "opencode" {
-  count        = local.install_claude ? 0 : 1
-  source       = "registry.coder.com/coder-labs/opencode/coder"
-  version      = "~> 0.1"
-  agent_id     = coder_agent.main.id
-  workdir      = "/home/coder/"
-  report_tasks = false
-  cli_app      = true
-}
-
-module "claude-code" {
-  count                   = local.install_claude ? 1 : 0
-  source                  = "registry.coder.com/coder/claude-code/coder"
-  version                 = "~> 4.2"
-  agent_id                = coder_agent.main.id
-  workdir                 = "/home/coder/Projects"
-  claude_code_oauth_token = local.claude_token
-  subdomain               = false
-  report_tasks            = true
-  depends_on              = [module.opencode]
-}
-
 resource "coder_app" "openclaw_ui" {
-  count        = local.openclaw_enabled ? data.coder_workspace.me.start_count : 0
+  count        = data.coder_workspace.me.start_count
   agent_id     = coder_agent.main.id
   slug         = "openclaw-ui"
   display_name = "OpenClaw UI"
   icon         = "/icon/folder.svg"
-  url          = "http://localhost:${local.openclaw_port}${local.openclaw_ui_path}"
+  url          = "http://localhost:${local.openclaw_port}/?token=${urlencode(local.openclaw_gateway_token)}"
   subdomain    = true
-  share        = "owner"
-  order        = 2
+  order        = 1
+  open_in      = "tab"
 
   healthcheck {
-    url       = "http://localhost:${local.openclaw_port}${local.openclaw_health_path}"
+    url       = "http://localhost:${local.openclaw_port}/"
     interval  = 5
     threshold = 6
   }

@@ -345,6 +345,21 @@ JSONCFG
     done
     chmod +x ~/Desktop/*.desktop 2>/dev/null || true
 
+    # Chrome dentro de contenedores host-mode necesita flags sin sandbox.
+    # Creamos wrappers en ~/.local/bin para terminal y lanzador desktop.
+    mkdir -p "$HOME/.local/bin"
+    cat > "$HOME/.local/bin/google-chrome" <<'CHROMEWRAP'
+#!/usr/bin/env bash
+exec /usr/bin/google-chrome-stable \
+  --no-sandbox \
+  --disable-setuid-sandbox \
+  --disable-seccomp-filter-sandbox \
+  --disable-gpu-sandbox \
+  "$@"
+CHROMEWRAP
+    chmod +x "$HOME/.local/bin/google-chrome"
+    ln -sf "$HOME/.local/bin/google-chrome" "$HOME/.local/bin/google-chrome-stable"
+
     # Entorno virtual de Python listo para usar
     mkdir -p "$HOME/.venvs"
     if [ ! -d "$HOME/.venvs/base" ]; then
