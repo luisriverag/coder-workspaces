@@ -21,6 +21,11 @@ Lee esto antes de tocar plantillas o imágenes. Para notas privadas, usa `AGENTS
 - `Minimal`: sin escritorio; code-server + Docker-in-Docker ligeros.
 - `OpenClaw`: template inicial para agentes/OpenClaw con escritorio XFCE/KasmVNC, Chrome, code-server + DinD y arranque configurable (`[OpenClaw] Auto-iniciar servicio`, puerto, directorio y comando).
 
+## OpenClaw: regla de origen (importante)
+- No configures `gateway.controlUi.allowedOrigins` con `*` en OpenClaw: termina en errores de conexión (`origin not allowed` / `disconnected (1006)`).
+- Usa siempre orígenes explícitos de Coder, por ejemplo:
+  `https://openclaw-ui--<workspace>--<owner>.<host-coder>` y `https://<host-coder>`.
+
 ## Publicar cambios
 1) Merge a `main`.
 2) GitHub Actions ( `.github/workflows/build.yml` ) construye y publica imágenes en GHCR con tags `latest` y `sha`.
