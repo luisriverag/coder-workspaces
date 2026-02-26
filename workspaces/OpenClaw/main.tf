@@ -462,6 +462,38 @@ JSONCFG
       node -v || true
     fi
 
+    # Homebrew en HOME persistente para skills/plugins opcionales de OpenClaw.
+    BREW_PREFIX="$HOME/.linuxbrew"
+    BREW_BIN="$BREW_PREFIX/bin/brew"
+    if [ ! -x "$BREW_BIN" ]; then
+      echo ">> Installing Homebrew in $BREW_PREFIX (persistent)..."
+      sudo DEBIAN_FRONTEND=noninteractive apt-get update -y || true
+      sudo DEBIAN_FRONTEND=noninteractive apt-get install -y build-essential procps curl file git || true
+      mkdir -p "$BREW_PREFIX"
+      if [ ! -d "$BREW_PREFIX/Homebrew/.git" ]; then
+        rm -rf "$BREW_PREFIX/Homebrew"
+        git clone --depth=1 https://github.com/Homebrew/brew "$BREW_PREFIX/Homebrew"
+      fi
+      mkdir -p "$BREW_PREFIX/bin"
+      ln -sf ../Homebrew/bin/brew "$BREW_BIN"
+    fi
+    if [ -x "$BREW_BIN" ]; then
+      eval "$("$BREW_BIN" shellenv)"
+      export HOMEBREW_NO_AUTO_UPDATE=1
+      if ! grep -q "HOMEBREW_NO_AUTO_UPDATE" /home/coder/.profile 2>/dev/null; then
+        echo 'export HOMEBREW_NO_AUTO_UPDATE=1' >> /home/coder/.profile
+      fi
+      if ! grep -q "HOMEBREW_NO_AUTO_UPDATE" /home/coder/.bashrc 2>/dev/null; then
+        echo 'export HOMEBREW_NO_AUTO_UPDATE=1' >> /home/coder/.bashrc
+      fi
+      if ! grep -q '\.linuxbrew/bin/brew shellenv' /home/coder/.profile 2>/dev/null; then
+        echo 'eval "$($HOME/.linuxbrew/bin/brew shellenv)"' >> /home/coder/.profile
+      fi
+      if ! grep -q '\.linuxbrew/bin/brew shellenv' /home/coder/.bashrc 2>/dev/null; then
+        echo 'eval "$($HOME/.linuxbrew/bin/brew shellenv)"' >> /home/coder/.bashrc
+      fi
+    fi
+
     # OpenClaw: instalación oficial no interactiva (si hace falta)
     export PATH="$HOME/.npm-global/bin:$HOME/.local/bin:$PATH"
     if ! grep -q "/.npm-global/bin" /home/coder/.profile 2>/dev/null; then

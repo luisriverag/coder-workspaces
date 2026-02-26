@@ -20,6 +20,7 @@ Template inicial para ejecutar OpenClaw sobre la imagen `ghcr.io/makespacemadrid
 - Navegador Chrome (con fallback a Chromium si no está disponible el paquete).
 - Docker instalado al iniciar y ejecutando DinD (dockerd dentro del contenedor).
 - Node.js actualizado automáticamente a `>=22.12` cuando hace falta (requisito de OpenClaw).
+- Homebrew instalado en `~/.linuxbrew` (persistente en `/home/coder`) para facilitar instalación de skills/plugins opcionales.
 - Parámetros de OpenClaw: autoarranque, puerto y directorio.
 - Instalación oficial de OpenClaw en primer arranque (`curl -fsSL https://openclaw.ai/install.sh | bash`) en modo no interactivo.
 - Script `~/.local/bin/start-openclaw` y logs en `~/.local/state/openclaw/openclaw.log`.
@@ -63,6 +64,7 @@ Template inicial para ejecutar OpenClaw sobre la imagen `ghcr.io/makespacemadrid
 - Si `[OpenClaw] Modelo por defecto` no incluye prefijo de provider, el template asume `makespace/<modelo>`.
 - Si el provider del modelo por defecto no está configurado (falta base URL), el template no fuerza ese modelo para evitar `Unknown model`.
 - El template persiste `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `FREEAPI_API_KEY` y `FREEAPI_BASE_URL` en `~/.openclaw/.env`.
+- El template deja Homebrew inicializado en `~/.profile` y `~/.bashrc` usando `eval "$($HOME/.linuxbrew/bin/brew shellenv)"`.
 - El template no parchea los assets de `control-ui`; usa el flujo nativo de OpenClaw para tomar `?token` y guardarlo en `localStorage`.
 - Puedes relanzar manualmente con `~/.local/bin/start-openclaw`.
 - Si ejecutas `openclaw dashboard` en una terminal sin GUI, es normal ver "No GUI detected"; en Coder abre directamente el app `OpenClaw UI`.
