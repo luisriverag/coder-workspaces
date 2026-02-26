@@ -45,24 +45,6 @@ variable "freeapi_key_endpoint" {
   type        = string
 }
 
-data "coder_parameter" "opencode_provider_url" {
-  name         = "04_opencode_provider_url"
-  display_name = "[AI/OpenAI] Base URL (opcional)"
-  description  = "Base URL compatible con OpenAI (ej. https://api.tu-proveedor.com/v1)."
-  type         = "string"
-  default      = ""
-  mutable      = true
-}
-
-data "coder_parameter" "opencode_api_key" {
-  name         = "04_opencode_api_key"
-  display_name = "[AI/OpenAI] API key (opcional)"
-  description  = "API key para el proveedor OpenAI compatible."
-  type         = "string"
-  default      = ""
-  mutable      = true
-}
-
 data "coder_parameter" "autoprovision_mks_key" {
   name         = "04_autoprovision_mks_key"
   display_name = "[AI/OpenCode] Provisionar API key MakeSpace automáticamente"
@@ -87,15 +69,6 @@ data "coder_parameter" "openclaw_autostart" {
   description  = "Intenta arrancar OpenClaw al iniciar el workspace (sin fallar si no esta instalado)."
   type         = "bool"
   default      = true
-  mutable      = true
-}
-
-data "coder_parameter" "openclaw_port" {
-  name         = "05_openclaw_port"
-  display_name = "[OpenClaw] Puerto"
-  description  = "Puerto TCP para la UI/API de OpenClaw."
-  type         = "number"
-  default      = 3333
   mutable      = true
 }
 
@@ -130,12 +103,12 @@ locals {
   mks_key_endpoint           = trimspace(var.mks_key_endpoint)
   freeapi_base_url           = trimspace(var.freeapi_base_url)
   freeapi_key_endpoint       = trimspace(var.freeapi_key_endpoint)
-  openai_base_url            = trimspace(data.coder_parameter.opencode_provider_url.value)
-  openai_api_key             = trimspace(data.coder_parameter.opencode_api_key.value)
+  openai_base_url            = local.opencode_default_base_url
+  openai_api_key             = ""
   auto_provision_mks_key     = data.coder_parameter.autoprovision_mks_key.value
   auto_provision_freeapi_key = data.coder_parameter.autoprovision_freeapi_key.value
   openclaw_autostart         = data.coder_parameter.openclaw_autostart.value
-  openclaw_port              = data.coder_parameter.openclaw_port.value
+  openclaw_port              = 3333
   openclaw_gateway_token     = random_password.openclaw_gateway_token.result
   openclaw_workdir           = trimspace(data.coder_parameter.openclaw_workdir.value)
   openclaw_workdir_resolved  = local.openclaw_workdir != "" ? local.openclaw_workdir : "/home/coder/Projects"
@@ -593,15 +566,47 @@ PY
       fi
       if [ -n "$${FREEAPI_BASE_URL:-}" ]; then
         freeapi_provider_json=$(python3 - <<'PY'
-import json, os
+import json, os, urllib.request
+base_url = os.environ.get("FREEAPI_BASE_URL", "").strip().rstrip("/")
+api_key = os.environ.get("FREEAPI_API_KEY", "").strip()
+discovered_ids = []
+for path in ("/v1/models", "/models"):
+    if not base_url:
+        continue
+    try:
+        headers = {"Accept": "application/json"}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+        req = urllib.request.Request(f"{base_url}{path}", headers=headers)
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            payload = json.loads(resp.read().decode("utf-8", "replace"))
+        items = payload.get("data", payload if isinstance(payload, list) else [])
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            model_id = item.get("id")
+            if isinstance(model_id, str) and model_id.endswith("-ha"):
+                discovered_ids.append(model_id)
+        if discovered_ids:
+            break
+    except Exception:
+        continue
+discovered_ids = sorted(set(discovered_ids))
+models = []
+for model_id in discovered_ids:
+    models.append({
+        "id": model_id,
+        "name": model_id,
+        "reasoning": model_id.startswith("qwen3"),
+        "input": ["text"],
+        "contextWindow": 32768,
+        "maxTokens": 8192,
+    })
 cfg = {
-    "baseUrl": os.environ.get("FREEAPI_BASE_URL", ""),
+    "baseUrl": base_url,
     "auth": "api-key",
     "api": "openai-completions",
-    "models": [
-        {"id": "gpt-oss-120b-ha", "name": "gpt-oss-120b-ha", "reasoning": False, "input": ["text"], "contextWindow": 32768, "maxTokens": 8192},
-        {"id": "qwen3-coder-ha", "name": "qwen3-coder-ha", "reasoning": True, "input": ["text"], "contextWindow": 32768, "maxTokens": 8192},
-    ],
+    "models": models,
 }
 print(json.dumps(cfg, separators=(",", ":")))
 PY
@@ -617,15 +622,39 @@ PY
       if openclaw config get models.providers.freeapi >/dev/null 2>&1; then
         has_freeapi=1
       fi
-      allowed_models_json=$(HAS_MAKESPACE="$has_makespace" HAS_FREEAPI="$has_freeapi" python3 - <<'PY'
+      freeapi_models_json="[]"
+      if [ "$has_freeapi" = "1" ]; then
+        freeapi_models_json=$(openclaw config get models.providers.freeapi --json 2>/dev/null | python3 - <<'PY'
+import json, sys
+try:
+    cfg = json.load(sys.stdin)
+except Exception:
+    cfg = {}
+models = cfg.get("models", [])
+ids = []
+for item in models:
+    if isinstance(item, dict):
+        model_id = item.get("id")
+        if isinstance(model_id, str) and model_id.endswith("-ha"):
+            ids.append(model_id)
+print(json.dumps(sorted(set(ids)), separators=(",", ":")))
+PY
+)
+      fi
+      allowed_models_json=$(HAS_MAKESPACE="$has_makespace" HAS_FREEAPI="$has_freeapi" FREEAPI_MODELS_JSON="$freeapi_models_json" python3 - <<'PY'
 import json, os
 allowed = {}
 if os.environ.get("HAS_MAKESPACE") == "1":
     for model in ("qwen3:14b", "qwen3:32b", "qwen3-coder:30b", "gpt-oss:20b"):
         allowed[f"makespace/{model}"] = {}
 if os.environ.get("HAS_FREEAPI") == "1":
-    for model in ("gpt-oss-120b-ha", "qwen3-coder-ha"):
-        allowed[f"freeapi/{model}"] = {}
+    try:
+        freeapi_models = json.loads(os.environ.get("FREEAPI_MODELS_JSON", "[]"))
+    except Exception:
+        freeapi_models = []
+    for model in freeapi_models:
+        if isinstance(model, str) and model.endswith("-ha"):
+            allowed[f"freeapi/{model}"] = {}
 print(json.dumps(allowed, separators=(",", ":")))
 PY
 )

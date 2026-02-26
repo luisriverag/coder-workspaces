@@ -30,12 +30,11 @@ Template inicial para ejecutar OpenClaw sobre la imagen `ghcr.io/makespacemadrid
 ## Creación rápida en Coder
 - Puedes entrar por KasmVNC (escritorio) o terminal.
 - `[OpenClaw] Auto-iniciar servicio`: arranca OpenClaw al iniciar.
-- `[OpenClaw] Puerto`: puerto de OpenClaw (por defecto `3333`).
 - `[OpenClaw] Directorio de trabajo`: directorio desde el que se ejecuta OpenClaw.
 - `[OpenClaw] Modelo por defecto`: modelo por defecto para OpenClaw (por defecto `makespace/qwen3:14b`).
-- `OpenCode Base URL` + `OpenCode API key`: variables de entorno OpenAI-compatible para uso manual.
 - `Provisionar API key MakeSpace automáticamente`: genera una key de 30 días si no aportas una.
 - `Provisionar API key FreeAPI automáticamente`: genera y precarga una key de FreeAPI al crear el workspace.
+- `TF_VAR_opencode_default_base_url`: base URL OpenAI-compatible de MakeSpace por defecto.
 - `TF_VAR_freeapi_base_url` + `TF_VAR_freeapi_key_endpoint`: endpoint OpenAI-compatible y endpoint de provisionado para FreeAPI.
 
 ## Notas
@@ -57,7 +56,7 @@ Template inicial para ejecutar OpenClaw sobre la imagen `ghcr.io/makespacemadrid
 - El template puede autoprovisionar 2 credenciales API (si hay endpoints): MakeSpace (`MKS_KEY_ENDPOINT`) y FreeAPI (`FREEAPI_KEY_ENDPOINT`), cada una con su propio toggle en el formulario.
 - El template crea `auth-profiles.json` con perfiles `makespace:manual` y/o `freeapi:manual`.
 - El template define `models.providers.makespace` con `qwen3:14b`, `qwen3:32b`, `qwen3-coder:30b`, `gpt-oss:20b`.
-- El template define `models.providers.freeapi` con `gpt-oss-120b-ha`, `qwen3-coder-ha`.
+- El template detecta modelos FreeAPI acabados en `-ha` consultando el endpoint OpenAI-compatible y los registra automáticamente.
 - El template rellena `agents.defaults.models` con esos modelos para que aparezcan en el selector de agentes.
 - El template asegura `agents.list` con entrada `id: "main"` para que los cambios de modelo en la UI de agentes se marquen como modificados y el botón `Save` se habilite.
 - Para los modelos de familia `qwen3*`, el template marca `reasoning=true`.
