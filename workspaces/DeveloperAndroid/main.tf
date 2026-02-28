@@ -502,10 +502,24 @@ if os.path.exists(path):
       data=json.load(f)
   except Exception:
     data={}
-prov=data.setdefault("provider",{}).setdefault("custom",{}).setdefault("options",{})
+prov_block=data.setdefault("provider",{}).setdefault("litellm",{})
+prov_block.setdefault("npm","@ai-sdk/openai-compatible")
+prov_block.setdefault("name","MakeSpace IA")
+prov=prov_block.setdefault("options",{})
 prov["baseURL"]=os.environ.get("OPENCODE_PROVIDER_URL") or os.environ.get("OPENCODE_DEFAULT_BASE_URL","")
 prov["apiKey"]=os.environ.get("OPENCODE_API_KEY","")
-data.setdefault("default_provider","custom")
+prov_block.setdefault("models",{
+  "devstral-small-2:24b":{"name":"Devstral Small 2 24b"},
+  "opencoder-8b-base":{"name":"OpenCoder 8b Base"},
+  "qwen2.5-coder:7b-base":{"name":"Qwen2.5 Coder 7b Base"},
+  "qwen3-coder:30b":{"name":"Qwen3 Coder 30b"},
+  "qwen3.5:27b":{"name":"Qwen3.5 27b"},
+  "qwen3:32b":{"name":"Qwen3 32b"},
+  "qwen3:14b":{"name":"Qwen3 14b"},
+  "qwen3:8b":{"name":"Qwen3 8b"},
+  "gpt-oss:20b":{"name":"GPT-OSS 20b"},
+  "gpt-oss-safeguard:latest":{"name":"GPT-OSS Safeguard"}
+})
 os.makedirs(os.path.dirname(path),exist_ok=True)
 with open(path,"w") as f:
   json.dump(data,f,indent=2)
@@ -529,6 +543,7 @@ GENMKS
     "opencode-mystatus",
     "opencode-handoff"
   ],
+  "disabled_providers": ["openai", "google"],
   "provider": {
     "openai": {
       "options": {
@@ -751,11 +766,24 @@ GENMKS
         }
       }
     },
-    "custom": {
-      "name": "Custom OpenAI Provider",
+    "litellm": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "MakeSpace IA",
       "options": {
         "baseURL": "OPENCODE_PROVIDER_URL_VALUE",
         "apiKey": "OPENCODE_API_KEY_VALUE"
+      },
+      "models": {
+        "devstral-small-2:24b": { "name": "Devstral Small 2 24b" },
+        "opencoder-8b-base": { "name": "OpenCoder 8b Base" },
+        "qwen2.5-coder:7b-base": { "name": "Qwen2.5 Coder 7b Base" },
+        "qwen3-coder:30b": { "name": "Qwen3 Coder 30b" },
+        "qwen3.5:27b": { "name": "Qwen3.5 27b" },
+        "qwen3:32b": { "name": "Qwen3 32b" },
+        "qwen3:14b": { "name": "Qwen3 14b" },
+        "qwen3:8b": { "name": "Qwen3 8b" },
+        "gpt-oss:20b": { "name": "GPT-OSS 20b" },
+        "gpt-oss-safeguard:latest": { "name": "GPT-OSS Safeguard" }
       }
     },
     "google": {
@@ -785,8 +813,7 @@ GENMKS
         "gemini-3-flash-preview": { "name": "Gemini 3 Flash Preview (Free Tier)" }
       }
     }
-  },
-  "default_provider": "custom"
+  }
 }
 JSONCFG
       sed -i "s|OPENCODE_PROVIDER_URL_VALUE|$${OPENCODE_PROVIDER_URL}|g" /home/coder/.opencode/opencode.json
@@ -842,7 +869,7 @@ provider = data.setdefault("provider", {})
 provider["freeapi"] = {
     "npm": "@ai-sdk/openai-compatible",
     "name": "FreeAPI",
-    "options": {"baseURL": base_url, "api_key": api_key},
+    "options": {"baseURL": base_url, "apiKey": api_key},
     "models": models,
 }
 with open(path, "w", encoding="utf-8") as f:

@@ -590,10 +590,12 @@ if os.path.exists(path):
       data=json.load(f)
   except Exception:
     data={}
-prov=data.setdefault("provider",{}).setdefault("custom",{}).setdefault("options",{})
+prov_block=data.setdefault("provider",{}).setdefault("litellm",{})
+prov_block.setdefault("npm","@ai-sdk/openai-compatible")
+prov_block.setdefault("name","MakeSpace IA")
+prov=prov_block.setdefault("options",{})
 prov["baseURL"]=os.environ.get("OPENCODE_PROVIDER_URL") or os.environ.get("OPENCODE_DEFAULT_BASE_URL","")
 prov["apiKey"]=os.environ.get("OPENCODE_API_KEY","")
-data.setdefault("default_provider","custom")
 os.makedirs(os.path.dirname(path),exist_ok=True)
 with open(path,"w") as f:
   json.dump(data,f,indent=2)
@@ -617,6 +619,7 @@ GENMKS
     "opencode-mystatus",
     "opencode-handoff"
   ],
+  "disabled_providers": ["openai", "google"],
   "provider": {
     "openai": {
       "options": {
@@ -844,7 +847,7 @@ GENMKS
       "name": "MakeSpace IA",
       "options": {
         "baseURL": "OPENCODE_PROVIDER_URL_VALUE",
-        "api_key": "OPENCODE_API_KEY_VALUE"
+        "apiKey": "OPENCODE_API_KEY_VALUE"
       },
       "models": {
         "devstral-small-2:24b": { "name": "Devstral Small 2 24b" },
@@ -949,7 +952,7 @@ provider = data.setdefault("provider", {})
 provider["freeapi"] = {
     "npm": "@ai-sdk/openai-compatible",
     "name": "FreeAPI",
-    "options": {"baseURL": base_url, "api_key": api_key},
+    "options": {"baseURL": base_url, "apiKey": api_key},
     "models": models,
 }
 

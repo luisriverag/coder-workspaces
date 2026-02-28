@@ -414,12 +414,28 @@ try:
         data=json.load(f)
 except Exception:
     data={}
+data["disabled_providers"]=["openai","google"]
 provider=data.setdefault("provider",{})
 base=(os.environ.get("OPENCODE_PROVIDER_URL") or "").strip().rstrip("/")
 key=(os.environ.get("OPENCODE_API_KEY") or "").strip()
 if key and base:
-    provider["custom"]={"name":"Custom OpenAI Provider","options":{"baseURL":base,"apiKey":key}}
-    data.setdefault("default_provider","custom")
+    provider["litellm"]={
+        "npm":"@ai-sdk/openai-compatible",
+        "name":"MakeSpace IA",
+        "options":{"baseURL":base,"apiKey":key},
+        "models":{
+            "devstral-small-2:24b":{"name":"Devstral Small 2 24b"},
+            "opencoder-8b-base":{"name":"OpenCoder 8b Base"},
+            "qwen2.5-coder:7b-base":{"name":"Qwen2.5 Coder 7b Base"},
+            "qwen3-coder:30b":{"name":"Qwen3 Coder 30b"},
+            "qwen3.5:27b":{"name":"Qwen3.5 27b"},
+            "qwen3:32b":{"name":"Qwen3 32b"},
+            "qwen3:14b":{"name":"Qwen3 14b"},
+            "qwen3:8b":{"name":"Qwen3 8b"},
+            "gpt-oss:20b":{"name":"GPT-OSS 20b"},
+            "gpt-oss-safeguard:latest":{"name":"GPT-OSS Safeguard"}
+        }
+    }
 free_base=(os.environ.get("FREEAPI_BASE_URL") or "").strip().rstrip("/")
 free_key=(os.environ.get("FREEAPI_API_KEY") or "").strip()
 def norm_model_id(raw):
@@ -456,7 +472,7 @@ if free_base:
     provider["freeapi"]={
         "npm":"@ai-sdk/openai-compatible",
         "name":"FreeAPI",
-        "options":{"baseURL":free_base,"api_key":free_key},
+        "options":{"baseURL":free_base,"apiKey":free_key},
         "models":{mid:{"name":mid} for mid in sorted(set(mids))}
     }
 with open(path,"w",encoding="utf-8") as f:
