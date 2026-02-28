@@ -41,6 +41,18 @@ variable "mks_key_endpoint" {
   description = "Endpoint para solicitar keys MakeSpace (autoprovision)."
   type        = string
 }
+
+variable "freeapi_base_url" {
+  default     = ""
+  description = "Base URL OpenAI-compatible para FreeAPI (ej. $TF_VAR_freeapi_base_url)."
+  type        = string
+}
+
+variable "freeapi_key_endpoint" {
+  default     = ""
+  description = "Endpoint para solicitar API keys de FreeAPI."
+  type        = string
+}
 # Parámetro para GPUs opcionales
 data "coder_parameter" "enable_gpu" {
   name         = "01_enable_gpu"
@@ -132,6 +144,15 @@ data "coder_parameter" "autoprovision_mks_key" {
   mutable      = true
 }
 
+data "coder_parameter" "autoprovision_freeapi_key" {
+  name         = "04_autoprovision_freeapi_key"
+  display_name = "[AI/FreeAPI] Provisionar API key automáticamente"
+  description  = "Si hay FREEAPI_BASE_URL/FREEAPI_KEY_ENDPOINT, solicita una key y configura FreeAPI en OpenCode."
+  type         = "bool"
+  default      = true
+  mutable      = true
+}
+
 data "coder_parameter" "vscode_extensions" {
   name         = "06_vscode_extensions"
   display_name = "[Code] Extensiones VS Code (preinstalar)"
@@ -160,8 +181,11 @@ locals {
   repo_name         = local.repo_url != "" ? trimsuffix(basename(local.repo_url), ".git") : ""
   default_repo_path = local.repo_name != "" ? "/home/coder/Projects/${local.repo_name}" : "/home/coder/Projects"
   auto_provision_mks_key  = data.coder_parameter.autoprovision_mks_key.value
+  auto_provision_freeapi_key = data.coder_parameter.autoprovision_freeapi_key.value
   opencode_default_base_url      = trimspace(var.opencode_default_base_url)
   mks_key_endpoint               = trimspace(var.mks_key_endpoint)
+  freeapi_base_url               = trimspace(var.freeapi_base_url)
+  freeapi_key_endpoint           = trimspace(var.freeapi_key_endpoint)
   continue_default_config = file("${path.module}/continue-config.yaml")
   vscode_extensions_default = [
     "coder.coder-remote",
@@ -375,6 +399,32 @@ JSONCFG
       fi
     fi
 
+    # Autoprovisionar clave FreeAPI si está habilitado y hay endpoint/base URL
+    freeapi_auto_flag="$${AUTO_PROVISION_FREEAPI_API_KEY:-true}"
+    if printf '%s' "$freeapi_auto_flag" | grep -Eq '^(1|true|TRUE|yes|on)$'; then
+      FREEAPI_BASE_URL="$${FREEAPI_BASE_URL:-}"
+      export FREEAPI_BASE_URL
+      freeapi_payload=""
+      if [ -z "$${FREEAPI_API_KEY:-}" ]; then
+        FREEAPI_ENDPOINT="$${FREEAPI_KEY_ENDPOINT:-}"
+        if [ -z "$FREEAPI_ENDPOINT" ]; then
+          echo "FREEAPI_KEY_ENDPOINT no configurado; omitiendo autoprovision de key FreeAPI" >&2
+        else
+          freeapi_alias="freeapi-$(tr -dc 0-9 </dev/urandom 2>/dev/null | head -c 8 | sed 's/^$/00000000/')"
+          freeapi_payload=$(printf '{"email":"%s","alias":"%s"}' "$${CODER_USER_EMAIL:-}" "$freeapi_alias")
+          freeapi_resp=$(curl -fsSL -X POST "$FREEAPI_ENDPOINT" -H "Content-Type: application/json" -d "$freeapi_payload" 2>/dev/null || true)
+          freeapi_key=$(printf '%s' "$freeapi_resp" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("key",""))' 2>/dev/null || true)
+          if [ -n "$freeapi_key" ]; then
+            FREEAPI_API_KEY="$freeapi_key"
+            export FREEAPI_API_KEY
+            mkdir -p /home/coder/.opencode
+            printf "%s" "$freeapi_key" > /home/coder/.opencode/.latest_freeapi_key || true
+            printf "%s" "$freeapi_payload" > /home/coder/.opencode/.latest_freeapi_request || true
+          fi
+        fi
+      fi
+    fi
+
     # Propagar variables a nuevas shells interactivas
     if [ -n "$${OPENCODE_PROVIDER_URL:-}" ]; then
       MKS_BASE_URL="$${MKS_BASE_URL:-$OPENCODE_PROVIDER_URL}"
@@ -469,7 +519,7 @@ GENMKS
     sudo chmod +x /usr/local/bin/gen_mks_litellm_key || true
 
     # Config inicial de OpenCode (opcional)
-    if [ -n "$${OPENCODE_PROVIDER_URL:-}" ] && [ -n "$${OPENCODE_API_KEY:-}" ]; then
+    if [ -n "$${OPENCODE_PROVIDER_URL:-}" ] && [ -n "$${OPENCODE_API_KEY:-}" ] || [ -n "$${FREEAPI_API_KEY:-}" ]; then
       mkdir -p /home/coder/.opencode
       cat > /home/coder/.opencode/opencode.json <<'JSONCFG'
 {
@@ -746,6 +796,64 @@ GENMKS
 JSONCFG
       sed -i "s|OPENCODE_PROVIDER_URL_VALUE|$${OPENCODE_PROVIDER_URL}|g" /home/coder/.opencode/opencode.json
       sed -i "s|OPENCODE_API_KEY_VALUE|$${OPENCODE_API_KEY}|g" /home/coder/.opencode/opencode.json
+      FREEAPI_BASE="$${FREEAPI_BASE_URL:-}"
+      FREEAPI_KEY="$${FREEAPI_API_KEY:-}"
+      FREEAPI_BASE="$${FREEAPI_BASE%/}"
+      if [ -n "$FREEAPI_BASE" ]; then
+        FREEAPI_BASE_URL="$FREEAPI_BASE" FREEAPI_API_KEY="$FREEAPI_KEY" python3 - <<'PY'
+import json, os, urllib.request
+path = "/home/coder/.opencode/opencode.json"
+base_url = (os.environ.get("FREEAPI_BASE_URL") or "").strip().rstrip("/")
+api_key = (os.environ.get("FREEAPI_API_KEY") or "").strip()
+if not base_url:
+    raise SystemExit(0)
+with open(path, "r", encoding="utf-8") as f:
+    data = json.load(f)
+def norm_model_id(raw):
+    if not isinstance(raw, str):
+        return ""
+    s = raw.strip()
+    if not s:
+        return ""
+    if "//" in s:
+        s = s.split("//", 1)[1]
+    if "/" in s:
+        s = s.rsplit("/", 1)[-1]
+    return s
+model_ids = []
+for p in ("/v1/models", "/models"):
+    try:
+        headers = {"Accept": "application/json"}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+        req = urllib.request.Request(f"{base_url}{p}", headers=headers)
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            payload = json.loads(resp.read().decode("utf-8", "replace"))
+        items = payload.get("data", payload if isinstance(payload, list) else [])
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            mid = norm_model_id(item.get("id"))
+            if mid.endswith("-ha"):
+                model_ids.append(mid)
+        if model_ids:
+            break
+    except Exception:
+        continue
+models = {}
+for mid in sorted(set(model_ids)):
+    models[mid] = {"name": mid}
+provider = data.setdefault("provider", {})
+provider["freeapi"] = {
+    "npm": "@ai-sdk/openai-compatible",
+    "name": "FreeAPI",
+    "options": {"baseURL": base_url, "api_key": api_key},
+    "models": models,
+}
+with open(path, "w", encoding="utf-8") as f:
+    json.dump(data, f, indent=2, ensure_ascii=False)
+PY
+      fi
       ln -sf /home/coder/.opencode/opencode.json /home/coder/.opencode/config.json || true
       chown -R "$USER:$USER" /home/coder/.opencode || true
     fi
@@ -763,9 +871,12 @@ EOT
     OPENCODE_API_KEY          = data.coder_parameter.opencode_api_key.value
     OPENCODE_DEFAULT_BASE_URL = local.opencode_default_base_url
     MKS_KEY_ENDPOINT          = local.mks_key_endpoint
+    FREEAPI_BASE_URL          = local.freeapi_base_url
+    FREEAPI_KEY_ENDPOINT      = local.freeapi_key_endpoint
     MKS_BASE_URL              = data.coder_parameter.opencode_provider_url.value
     MKS_API_KEY               = data.coder_parameter.opencode_api_key.value
     AUTO_PROVISION_MKS_API_KEY = tostring(local.auto_provision_mks_key)
+    AUTO_PROVISION_FREEAPI_API_KEY = tostring(local.auto_provision_freeapi_key)
     CODER_USER_EMAIL      = data.coder_workspace_owner.me.email
     DEFAULT_REPO_PATH     = local.default_repo_path
   }
