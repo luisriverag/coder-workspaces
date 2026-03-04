@@ -25,7 +25,7 @@ RUN dpkg --add-architecture i386 && \
     apt-get install -y --no-install-recommends \
         build-essential \
         pkg-config \
-        python3 python3-venv python3-pip pipx \
+        python3 python3-venv python3-pip python3-requests pipx \
         zip unzip p7zip-full \
         fuse3 \
         libfuse2 \
@@ -80,7 +80,7 @@ RUN dpkg --add-architecture i386 && \
         alsa-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# OrcaSlicer (AppImage), LaserGRBL (Wine) y VisiCut (.deb)
+# OrcaSlicer (AppImage), LaserGRBL (Wine), OpenCode Desktop y VisiCut (.deb)
 RUN <<'EOSH'
 set -e
 ORCA_VERSION="2.3.1"
@@ -118,6 +118,52 @@ rm /tmp/opencode-desktop.deb
 rm -rf /var/lib/apt/lists/*
 EOSH
 
+# Claude Desktop (.deb repo comunitario) + wrapper no-sandbox para Electron
+RUN <<'EOSH'
+set -e
+curl -fsSL https://aaddrick.github.io/claude-desktop-debian/KEY.gpg | gpg --dearmor -o /usr/share/keyrings/claude-desktop.gpg
+echo "deb [signed-by=/usr/share/keyrings/claude-desktop.gpg arch=amd64,arm64] https://aaddrick.github.io/claude-desktop-debian stable main" > /etc/apt/sources.list.d/claude-desktop.list
+apt-get update
+apt-get install -y --no-install-recommends claude-desktop
+rm -rf /var/lib/apt/lists/*
+if [ -x /usr/share/claude-desktop/claude-desktop ] && [ -x /usr/bin/claude-desktop ]; then
+  mv /usr/bin/claude-desktop /usr/bin/claude-desktop.real || true
+  cat > /usr/bin/claude-desktop <<'EOFWRAP'
+#!/bin/sh
+exec env ELECTRON_DISABLE_SANDBOX=1 ELECTRON_OZONE_PLATFORM_HINT="${ELECTRON_OZONE_PLATFORM_HINT:-auto}" \
+  /usr/share/claude-desktop/claude-desktop --no-sandbox --disable-gpu-sandbox --disable-setuid-sandbox --disable-seccomp-filter-sandbox --no-zygote --disable-gpu "$@"
+EOFWRAP
+  chmod +x /usr/bin/claude-desktop
+fi
+EOSH
+
+# Blender 3.6 LTS (binario oficial)
+ARG BLENDER_VERSION=3.6.23
+RUN <<'EOSH'
+set -e
+BLENDER_DIR="/opt/blender"
+BLENDER_PKG="blender-${BLENDER_VERSION}-linux-x64"
+BLENDER_URL="https://download.blender.org/release/Blender3.6/${BLENDER_PKG}.tar.xz"
+mkdir -p /opt
+curl -fL "${BLENDER_URL}" -o /tmp/blender.tar.xz
+tar -xJf /tmp/blender.tar.xz -C /opt
+rm -f /tmp/blender.tar.xz
+rm -rf "${BLENDER_DIR}"
+mv "/opt/${BLENDER_PKG}" "${BLENDER_DIR}"
+ln -sf "${BLENDER_DIR}/blender" /usr/local/bin/blender
+ln -sf "${BLENDER_DIR}/blender-thumbnailer" /usr/local/bin/blender-thumbnailer || true
+install -D -m 0644 "${BLENDER_DIR}/blender.svg" /usr/share/icons/hicolor/scalable/apps/blender.svg
+cat > /usr/share/applications/blender.desktop <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=Blender
+Exec=blender
+Icon=blender
+Categories=Graphics;3DGraphics;
+Terminal=false
+EOF
+EOSH
+
 # Configuración FUSE para permitir AppImages (allow_other)
 RUN echo "user_allow_other" > /etc/fuse.conf
 
@@ -125,8 +171,17 @@ RUN echo "user_allow_other" > /etc/fuse.conf
 RUN locale-gen es_ES.UTF-8 en_US.UTF-8 && \
     update-locale LANG=es_ES.UTF-8
 
+# KasmVNC usa `startkde`; en Plasma moderno el binario es `startplasma-x11`.
+RUN if [ -x /usr/bin/startplasma-x11 ] && [ ! -x /usr/bin/startkde ]; then \
+      ln -sf /usr/bin/startplasma-x11 /usr/bin/startkde; \
+    fi && \
+    update-alternatives --set x-session-manager /usr/bin/startplasma-x11 || true
+
 ENV LANG=es_ES.UTF-8 \
     LC_ALL=es_ES.UTF-8
+
+ENV ELECTRON_DISABLE_SANDBOX=1 \
+    ELECTRON_OZONE_PLATFORM_HINT=auto
 
 # Utilidades NVIDIA para `nvidia-smi` cuando se habilitan GPUs
 RUN set -e; \
@@ -137,6 +192,31 @@ RUN set -e; \
       fi; \
     fi; \
     rm -rf /var/lib/apt/lists/*
+
+# Node.js 22 LTS + CLIs de IA para trabajo con código
+RUN install -m 0755 -d /etc/apt/keyrings && \
+    curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg && \
+    echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_22.x nodistro main" \
+      | tee /etc/apt/sources.list.d/nodesource.list > /dev/null && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends nodejs && \
+    npm install -g --omit=dev --no-update-notifier --no-fund \
+        @openai/codex \
+        @anthropic-ai/claude-code && \
+    npm cache clean --force && \
+    rm -rf /var/lib/apt/lists/*
+
+# uv + OpenCode CLI (binario en /usr/local/bin/opencode)
+RUN <<'EOSH'
+set -e
+# uv (Astral)
+curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh
+# OpenCode CLI using official installer in an unmanaged path
+export HOME=/opt/opencode-cli
+mkdir -p "$HOME"
+curl -fsSL https://opencode.ai/install | bash -s -- --no-modify-path
+install -m 0755 /opt/opencode-cli/.opencode/bin/opencode /usr/local/bin/opencode
+EOSH
 
 # Desactivar bloqueo/ahorro de pantalla (KDE)
 RUN printf '[Daemon]\nTimeout=0\nLockOnResume=false\nLockOnSuspend=false\nAutolock=false\n' > /etc/xdg/kscreenlockerrc
@@ -209,7 +289,7 @@ RUN update-desktop-database /usr/share/applications || true && \
 
 # Crear accesos directos en Desktop para todas las aplicaciones
 RUN mkdir -p /etc/skel/Desktop && \
-    for f in firefox.desktop org.freecadweb.FreeCAD.desktop org.inkscape.Inkscape.desktop gimp.desktop org.kde.krita.desktop org.kicad.kicad.desktop openscad.desktop PrusaSlicer.desktop librecad.desktop meshlab.desktop org.fritzing.Fritzing.desktop net.launchpad.code.simulide.desktop geany.desktop VisiCut.desktop orcaslicer.desktop appimagepool.desktop OpenCode.desktop; do \
+    for f in firefox.desktop org.freecadweb.FreeCAD.desktop org.inkscape.Inkscape.desktop gimp.desktop org.kde.krita.desktop org.kicad.kicad.desktop openscad.desktop PrusaSlicer.desktop librecad.desktop meshlab.desktop org.fritzing.Fritzing.desktop net.launchpad.code.simulide.desktop geany.desktop VisiCut.desktop orcaslicer.desktop appimagepool.desktop OpenCode.desktop claude-desktop.desktop; do \
       src="/usr/share/applications/$f"; \
       if [ -f "$src" ]; then ln -sf "$src" "/etc/skel/Desktop/$f"; fi; \
     done && \

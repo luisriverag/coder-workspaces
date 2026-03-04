@@ -59,7 +59,7 @@ data "coder_parameter" "enable_gpu" {
   display_name = "[Compute] GPU"
   description  = "Expone GPUs al contenedor."
   type         = "bool"
-  default      = true
+  default      = false
   mutable      = true
 }
 
@@ -68,7 +68,7 @@ data "coder_parameter" "enable_dri" {
   display_name = "[Compute] DRI (/dev/dri)"
   description  = "Mapea /dev/dri para aceleracion grafica (Intel/AMD o NVIDIA via EGL/GL)."
   type         = "bool"
-  default      = false
+  default      = true
   mutable      = true
 }
 
@@ -99,46 +99,10 @@ data "coder_parameter" "persist_projects_storage" {
   mutable      = true
 }
 
-data "coder_parameter" "host_mount_path" {
-  name         = "02_03_host_mount_path"
-  display_name = "[Storage] Montar ruta host en ~/host"
-  description  = "Ruta del host que se monta en /home/coder/host dentro del workspace."
-  type         = "string"
-  default      = ""
-  mutable      = true
-}
-
-data "coder_parameter" "host_mount_uid" {
-  name         = "02_04_host_mount_uid"
-  display_name = "[Storage] Especificar UID para montar la ruta host"
-  description  = "UID para ejecutar el contenedor cuando montas ~/host. Por defecto 1000."
-  type         = "string"
-  default      = "1000"
-  mutable      = true
-}
-
-data "coder_parameter" "opencode_provider_url" {
-  name         = "04_opencode_provider_url"
-  display_name = "[AI/OpenAI] Base URL (opcional)"
-  description  = "Base URL compatible con OpenAI (ej. https://api.tu-proveedor.com/v1)."
-  type         = "string"
-  default      = ""
-  mutable      = true
-}
-
-data "coder_parameter" "opencode_api_key" {
-  name         = "04_opencode_api_key"
-  display_name = "[AI/OpenAI] API key (opcional)"
-  description  = "API key para el proveedor OpenAI compatible. Si la dejas vacía se generará una llave MakeSpace válida 30 días."
-  type         = "string"
-  default      = ""
-  mutable      = true
-}
-
 data "coder_parameter" "autoprovision_mks_key" {
   name         = "04_autoprovision_mks_key"
-  display_name = "[AI/OpenCode] Provisionar API key MakeSpace automáticamente"
-  description  = "Genera y precarga una API key MakeSpace (30 días) cuando no aportas URL/API key."
+  display_name = "[AI/MakeSpace] Provisionar API key MakeSpace automáticamente"
+  description  = "Genera y precarga una API key MakeSpace. La API de MakeSpace es privada en los servidores de MakeSpace."
   type         = "bool"
   default      = true
   mutable      = true
@@ -147,19 +111,32 @@ data "coder_parameter" "autoprovision_mks_key" {
 data "coder_parameter" "autoprovision_freeapi_key" {
   name         = "04_autoprovision_freeapi_key"
   display_name = "[AI/FreeAPI] Provisionar API key automáticamente"
-  description  = "Si hay FREEAPI_BASE_URL/FREEAPI_KEY_ENDPOINT, solicita una key y configura FreeAPI en OpenCode."
+  description  = "Generar automaticamente una key con acceso a recursos gratis externos que pueden no ser privados."
   type         = "bool"
   default      = true
   mutable      = true
 }
 
-data "coder_parameter" "vscode_extensions" {
-  name         = "06_vscode_extensions"
-  display_name = "[Code] Extensiones VS Code (preinstalar)"
-  description  = "Lista separada por comas de extensiones a preinstalar en VS Code/code-server."
+data "coder_parameter" "opencode_default_model" {
+  name         = "04_opencode_default_model"
+  display_name = "[AI/OpenCode] Modelo por defecto"
+  description  = "Modelo por defecto de OpenCode. En Auto: si hay FreeAPI se usa freeapi/glm-5-ha; si no, litellm/qwen3.5:27b."
   type         = "string"
-  default      = join(", ", local.vscode_extensions_default)
+  form_type    = "dropdown"
+  default      = "auto"
   mutable      = true
+  option {
+    name  = "Auto (regla Maker)"
+    value = "auto"
+  }
+  option {
+    name  = "MakeSpace: qwen3.5:27b"
+    value = "litellm/qwen3.5:27b"
+  }
+  option {
+    name  = "FreeAPI: glm-5-ha"
+    value = "freeapi/glm-5-ha"
+  }
 }
 
 locals {
@@ -169,8 +146,8 @@ locals {
   enable_dri           = data.coder_parameter.enable_dri.value
   persist_home_storage           = data.coder_parameter.persist_home_storage.value
   persist_projects_storage       = data.coder_parameter.persist_projects_storage.value
-  host_mount_path                = trimspace(data.coder_parameter.host_mount_path.value)
-  host_mount_uid                 = trimspace(data.coder_parameter.host_mount_uid.value)
+  host_mount_path                = ""
+  host_mount_uid                 = "1000"
   workspace_storage_root         = trimspace(var.users_storage)
   workspace_storage_home         = local.workspace_storage_root != "" ? "${local.workspace_storage_root}/${local.username}/${lower(data.coder_workspace.me.name)}" : ""
   workspace_storage_projects     = local.workspace_storage_root != "" ? "${local.workspace_storage_root}/${local.username}/${lower(data.coder_workspace.me.name)}/Projects" : ""
@@ -182,22 +159,12 @@ locals {
   default_repo_path = local.repo_name != "" ? "/home/coder/Projects/${local.repo_name}" : "/home/coder/Projects"
   auto_provision_mks_key  = data.coder_parameter.autoprovision_mks_key.value
   auto_provision_freeapi_key = data.coder_parameter.autoprovision_freeapi_key.value
+  opencode_default_model      = trimspace(data.coder_parameter.opencode_default_model.value)
   opencode_default_base_url      = trimspace(var.opencode_default_base_url)
   mks_key_endpoint               = trimspace(var.mks_key_endpoint)
   freeapi_base_url               = trimspace(var.freeapi_base_url)
   freeapi_key_endpoint           = trimspace(var.freeapi_key_endpoint)
   continue_default_config = file("${path.module}/continue-config.yaml")
-  vscode_extensions_default = [
-    "coder.coder-remote",
-    "openai.chatgpt",
-    "Anthropic.claude-code",
-    "Continue.continue"
-  ]
-  vscode_extensions_input = trimspace(data.coder_parameter.vscode_extensions.value)
-  vscode_extensions = local.vscode_extensions_input != "" ? [
-    for ext in split(",", local.vscode_extensions_input) : trimspace(ext)
-    if trimspace(ext) != ""
-  ] : local.vscode_extensions_default
 }
 
 provider "docker" {
@@ -271,6 +238,36 @@ PULSECFG
           fi
         fi
       done
+
+      # Activar aceleracion 3D en KasmVNC solo cuando la ruta GBM/DRI es viable.
+      # Nota: con driver NVIDIA propietario suele fallar con "Failed to create gbm".
+      mkdir -p "$HOME/.vnc"
+      KASM_USER_CFG="$HOME/.vnc/kasmvnc.yaml"
+      KASM_MANAGED_TAG="# managed-by-maker-template: kasmvnc-hw3d"
+      HAS_RENDER_NODE=false
+      if [ -e /dev/dri/renderD128 ] && [ -r /dev/dri/renderD128 ] && [ -w /dev/dri/renderD128 ]; then
+        HAS_RENDER_NODE=true
+      fi
+      HAS_NVIDIA=false
+      if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi >/dev/null 2>&1; then
+        HAS_NVIDIA=true
+      fi
+
+      if [ "$HAS_RENDER_NODE" = "true" ] && [ "$HAS_NVIDIA" = "false" ]; then
+        cat > "$KASM_USER_CFG" <<'KASMGPUCFG'
+# managed-by-maker-template: kasmvnc-hw3d
+desktop:
+  gpu:
+    hw3d: true
+    drinode: /dev/dri/renderD128
+KASMGPUCFG
+      else
+        # Si existe un fichero gestionado por este template, retirarlo para evitar
+        # que KasmVNC no arranque en hosts sin soporte GBM/DRI compatible.
+        if [ -f "$KASM_USER_CFG" ] && grep -qF "$KASM_MANAGED_TAG" "$KASM_USER_CFG"; then
+          rm -f "$KASM_USER_CFG"
+        fi
+      fi
     fi
 
     # Symlink de opencode cuando se instale bajo /root (start script espera /home/coder/.opencode)
@@ -317,16 +314,6 @@ for path in paths:
     with open(path, "w") as f:
         json.dump(data, f, indent=2)
 PY
-    if [ ! -f "$HOME/Projects/.vscode/extensions.json" ]; then
-      mkdir -p "$HOME/Projects/.vscode"
-      cat > "$HOME/Projects/.vscode/extensions.json" <<'VSCODEEXT'
-{
-  "recommendations": [
-${join(",\n", formatlist("    \"%s\"", local.vscode_extensions))}
-  ]
-}
-VSCODEEXT
-    fi
     mkdir -p ~/.opencode ~/.config/opencode
     if [ ! -f ~/.opencode/opencode.json ]; then
       cat > ~/.opencode/opencode.json <<'JSONCFG'
@@ -335,6 +322,180 @@ JSONCFG
     fi
     ln -sf ~/.opencode/opencode.json ~/.opencode/config.json || true
     ln -sf ~/.opencode/opencode.json ~/.config/opencode/opencode.json || true
+
+    # MCP setup para herramientas Maker (Blender, FreeCAD, KiCad, Inkscape, GIMP)
+    mkdir -p "$HOME/.local/bin" "$HOME/.local/share/mcp-servers" "$HOME/.config/inkscape/extensions"
+    clone_or_update() {
+      repo_url="$1"
+      target_dir="$2"
+      if [ -d "$target_dir/.git" ]; then
+        git -C "$target_dir" pull --ff-only >/dev/null 2>&1 || true
+      else
+        rm -rf "$target_dir"
+        git clone --depth 1 "$repo_url" "$target_dir" >/dev/null 2>&1 || true
+      fi
+    }
+    clone_or_update "https://github.com/lamaalrajih/kicad-mcp.git" "$HOME/.local/share/mcp-servers/kicad-mcp"
+    clone_or_update "https://github.com/maorcc/gimp-mcp.git" "$HOME/.local/share/mcp-servers/gimp-mcp"
+    clone_or_update "https://github.com/Shriinivas/inkmcp.git" "$HOME/.config/inkscape/extensions/inkmcp"
+    clone_or_update "https://github.com/neka-nat/freecad-mcp.git" "$HOME/.local/share/mcp-servers/freecad-mcp"
+    clone_or_update "https://github.com/ahujasid/blender-mcp.git" "$HOME/.local/share/mcp-servers/blender-mcp"
+
+    # Blender MCP addon preinstalado y habilitado en el perfil del usuario.
+    BLENDER_MM="$(blender --version 2>/dev/null | awk 'NR==1 { split($2, v, "."); print v[1] "." v[2] }')"
+    if [ -n "$BLENDER_MM" ] && [ -f "$HOME/.local/share/mcp-servers/blender-mcp/addon.py" ]; then
+      BLENDER_ADDONS_DIR="$HOME/.config/blender/$BLENDER_MM/scripts/addons"
+      mkdir -p "$BLENDER_ADDONS_DIR"
+      cp -f "$HOME/.local/share/mcp-servers/blender-mcp/addon.py" "$BLENDER_ADDONS_DIR/blender_mcp.py"
+      blender --background --factory-startup --python-expr "import bpy; bpy.ops.preferences.addon_enable(module='blender_mcp'); bpy.ops.wm.save_userpref()" >/dev/null 2>&1 || true
+    fi
+
+    mkdir -p "$HOME/.local/share/FreeCAD/Mod" "$HOME/.FreeCAD/Mod"
+    if [ -d "$HOME/.local/share/mcp-servers/freecad-mcp/addon/FreeCADMCP" ]; then
+      rm -rf "$HOME/.local/share/FreeCAD/Mod/FreeCADMCP" "$HOME/.FreeCAD/Mod/FreeCADMCP"
+      cp -r "$HOME/.local/share/mcp-servers/freecad-mcp/addon/FreeCADMCP" "$HOME/.local/share/FreeCAD/Mod/FreeCADMCP"
+      cp -r "$HOME/.local/share/mcp-servers/freecad-mcp/addon/FreeCADMCP" "$HOME/.FreeCAD/Mod/FreeCADMCP"
+    fi
+    # Instalación robusta del entrypoint de Inkscape MCP (evita problemas con symlinks en algunos entornos).
+    if [ -f "$HOME/.config/inkscape/extensions/inkmcp/inkscape_mcp.inx" ]; then
+      cp -f "$HOME/.config/inkscape/extensions/inkmcp/inkscape_mcp.inx" "$HOME/.config/inkscape/extensions/inkscape_mcp.inx"
+    fi
+    cat > "$HOME/.config/inkscape/extensions/inkscape_mcp.py" <<'INKWRAP'
+#!/usr/bin/env python3
+import os
+import runpy
+import sys
+
+base = os.path.expanduser("~/.config/inkscape/extensions")
+repo = os.path.join(base, "inkmcp")
+for p in (base, repo):
+    if p not in sys.path:
+        sys.path.insert(0, p)
+
+target = os.path.join(repo, "inkscape_mcp.py")
+if not os.path.isfile(target):
+    raise SystemExit(f"inkscape_mcp.py no encontrado en {target}")
+
+runpy.run_path(target, run_name="__main__")
+INKWRAP
+    chmod +x "$HOME/.config/inkscape/extensions/inkscape_mcp.py"
+
+    INK_RUN="$HOME/.config/inkscape/extensions/inkmcp/inkmcp/run_inkscape_mcp.sh"
+    [ -f "$INK_RUN" ] && chmod +x "$INK_RUN" || true
+    chmod +x "$HOME/.config/inkscape/extensions/inkmcp/inkmcp/inkmcpcli.py" "$HOME/.config/inkscape/extensions/inkmcp/inkmcp/inkscape_mcp_server.py" "$HOME/.config/inkscape/extensions/inkmcp/inkmcp/main.py" 2>/dev/null || true
+
+    if command -v uv >/dev/null 2>&1; then
+      [ -d "$HOME/.local/share/mcp-servers/kicad-mcp" ] && uv sync --directory "$HOME/.local/share/mcp-servers/kicad-mcp" >/dev/null 2>&1 || true
+      [ -d "$HOME/.local/share/mcp-servers/gimp-mcp" ] && uv sync --directory "$HOME/.local/share/mcp-servers/gimp-mcp" >/dev/null 2>&1 || true
+    fi
+    if [ -f "$HOME/.config/inkscape/extensions/inkmcp/inkmcp/requirements.txt" ]; then
+      python3 -m pip install --user --quiet --break-system-packages -r "$HOME/.config/inkscape/extensions/inkmcp/inkmcp/requirements.txt" >/dev/null 2>&1 || true
+    fi
+
+    cat > "$HOME/.local/bin/inkscape-mcp-launcher" <<'INKLAUNCH'
+#!/usr/bin/env bash
+set -euo pipefail
+BASE="$HOME/.config/inkscape/extensions/inkmcp/inkmcp"
+if [ ! -f "$BASE/main.py" ]; then
+  echo "inkmcp no encontrado en $BASE" >&2
+  exit 1
+fi
+export XDG_RUNTIME_DIR="$${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+export DBUS_SESSION_BUS_ADDRESS="$${DBUS_SESSION_BUS_ADDRESS:-unix:path=$${XDG_RUNTIME_DIR}/bus}"
+if ! python3 -c 'import fastmcp' >/dev/null 2>&1; then
+  python3 -m pip install --user --quiet --break-system-packages fastmcp
+fi
+python3 "$BASE/main.py"
+INKLAUNCH
+    chmod +x "$HOME/.local/bin/inkscape-mcp-launcher"
+
+    mkdir -p "$HOME/.codex"
+    touch "$HOME/.codex/config.toml"
+    if ! grep -q '^\[mcp_servers\.blender\]' "$HOME/.codex/config.toml" 2>/dev/null; then
+      cat >> "$HOME/.codex/config.toml" <<'CODEXMCP'
+
+[mcp_servers.blender]
+command = "uvx"
+args = ["blender-mcp"]
+
+[mcp_servers.freecad]
+command = "uvx"
+args = ["freecad-mcp"]
+
+[mcp_servers.kicad]
+command = "uv"
+args = ["run", "--directory", "/home/coder/.local/share/mcp-servers/kicad-mcp", "main.py"]
+
+[mcp_servers.gimp]
+command = "uv"
+args = ["run", "--directory", "/home/coder/.local/share/mcp-servers/gimp-mcp", "gimp_mcp_server.py"]
+
+[mcp_servers.inkscape]
+command = "/home/coder/.local/bin/inkscape-mcp-launcher"
+CODEXMCP
+    fi
+
+    python3 - <<'PY'
+import json
+import os
+import shutil
+
+home = os.path.expanduser("~")
+kicad_dir = os.path.join(home, ".local", "share", "mcp-servers", "kicad-mcp")
+gimp_dir = os.path.join(home, ".local", "share", "mcp-servers", "gimp-mcp")
+ink_launcher = os.path.join(home, ".local", "bin", "inkscape-mcp-launcher")
+
+claude_servers = {
+    "blender": {"command": "uvx", "args": ["blender-mcp"]},
+    "freecad": {"command": "uvx", "args": ["freecad-mcp"]},
+    "kicad": {"command": "uv", "args": ["run", "--directory", kicad_dir, "main.py"]},
+    "gimp": {"command": "uv", "args": ["run", "--directory", gimp_dir, "gimp_mcp_server.py"]},
+    "inkscape": {"command": ink_launcher},
+}
+
+opencode_servers = {
+    "blender": {"type": "local", "enabled": True, "command": ["uvx", "blender-mcp"]},
+    "freecad": {"type": "local", "enabled": True, "command": ["uvx", "freecad-mcp"]},
+    "kicad": {"type": "local", "enabled": True, "command": ["uv", "run", "--directory", kicad_dir, "main.py"]},
+    "gimp": {"type": "local", "enabled": True, "command": ["uv", "run", "--directory", gimp_dir, "gimp_mcp_server.py"]},
+    "inkscape": {"type": "local", "enabled": True, "command": [ink_launcher]},
+}
+
+def load_json(path):
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def save_json(path, data):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+
+claude_path = os.path.join(home, ".claude.json")
+claude_cfg = load_json(claude_path)
+claude_cfg.setdefault("mcpServers", {}).update(claude_servers)
+save_json(claude_path, claude_cfg)
+
+claude_desktop_path = os.path.join(home, ".config", "Claude", "claude_desktop_config.json")
+claude_desktop_cfg = load_json(claude_desktop_path)
+claude_desktop_cfg.setdefault("mcpServers", {}).update(claude_servers)
+save_json(claude_desktop_path, claude_desktop_cfg)
+
+for path in (
+    os.path.join(home, ".opencode", "opencode.json"),
+    os.path.join(home, ".config", "opencode", "opencode.json"),
+):
+    cfg = load_json(path)
+    mcp_cfg = cfg.setdefault("mcp", {})
+    mcp_cfg.update(opencode_servers)
+    if shutil.which("coder") is None and "coder" in mcp_cfg:
+        mcp_cfg["coder"] = {"enabled": False}
+    save_json(path, cfg)
+PY
 
     # KasmVNC busca startkde; en Plasma moderno es startplasma-x11
     if [ -x /usr/bin/startplasma-x11 ] && [ ! -x /usr/bin/startkde ]; then
@@ -357,7 +518,77 @@ JSONCFG
     done
     chmod +x ~/Desktop/*.desktop 2>/dev/null || true
 
+    # Guía rápida MCP en el escritorio.
+    cat > "$HOME/Desktop/MCPS-README.md" <<'MCPREADME'
+# MCPs en Maker: guía rápida
+
+Este workspace trae MCPs de:
+- Blender
+- FreeCAD
+- KiCad
+- Inkscape
+- GIMP
+
+## Comprobar estado
+
+```bash
+codex mcp list
+claude mcp list
+opencode mcp list
+```
+
+## Blender (paso obligatorio)
+
+1. Abre Blender.
+2. Confirma addon activo: `Blender MCP` (`blender_mcp`).
+3. En la vista 3D pulsa `N` y abre la pestaña `BlenderMCP`.
+4. Pulsa `Connect to MCP server` / `Start Server`.
+
+Si no haces este paso, verás: "Blender no está conectado".
+
+## FreeCAD
+
+- El addon `FreeCADMCP` queda instalado en:
+  - `~/.local/share/FreeCAD/Mod/FreeCADMCP`
+  - `~/.FreeCAD/Mod/FreeCADMCP`
+- Abre FreeCAD, selecciona el workbench MCP Addon y dale a Start RPC server.
+
+## Inkscape
+
+- Inkscape MCP necesita Inkscape abierto para operaciones sobre el documento activo.
+- La extensión `inkmcp` se instala en: `~/.config/inkscape/extensions/inkmcp`
+- Launcher MCP usado por los clientes: `~/.local/bin/inkscape-mcp-launcher`
+- Si el estado sale `failed`, abre Inkscape y vuelve a lanzar el comando del cliente MCP.
+
+## GIMP (paso obligatorio)
+
+1. Instala el plugin de GIMP MCP (primera vez):
+   ```bash
+   mkdir -p ~/.config/GIMP/3.0/plug-ins/gimp-mcp-plugin
+   cp ~/.local/share/mcp-servers/gimp-mcp/gimp-mcp-plugin.py ~/.config/GIMP/3.0/plug-ins/gimp-mcp-plugin/
+   chmod +x ~/.config/GIMP/3.0/plug-ins/gimp-mcp-plugin/gimp-mcp-plugin.py
+   ```
+2. Reinicia GIMP.
+3. Abre una imagen.
+4. En GIMP: `Tools > Start MCP Server`.
+5. Deja GIMP abierto mientras uses herramientas MCP.
+
+## KiCad
+
+- Si una operación requiere UI/contexto del proyecto, abre KiCad primero.
+
+## Prueba rápida sugerida
+
+1. Abre Blender y arranca su servidor MCP.
+2. Ejecuta: `claude mcp list` (debe salir `blender ... ✓ Connected`).
+3. Pide al agente crear un cubo y guardar en:
+   `/home/coder/Projects/mcp-blender-test.blend`
+MCPREADME
+    chown "$USER:$USER" "$HOME/Desktop/MCPS-README.md" || true
+
     # Autoprovisionar clave OpenCode MakeSpace si está habilitado
+    echo "Aviso IA: la API de MakeSpace es privada en los servidores de MakeSpace." >&2
+    echo "Aviso IA: FreeAPI está conectada a recursos cloud gratis que pueden ser no libres." >&2
     auto_flag="$${AUTO_PROVISION_MKS_API_KEY:-true}"
     if [ -z "$${OPENCODE_PROVIDER_URL:-}" ] && [ -n "$${OPENCODE_DEFAULT_BASE_URL:-}" ]; then
       OPENCODE_PROVIDER_URL="$${OPENCODE_DEFAULT_BASE_URL}"
@@ -884,7 +1115,79 @@ with open(path, "w", encoding="utf-8") as f:
     json.dump(data, f, indent=2, ensure_ascii=False)
 PY
       fi
+      OPENCODE_DEFAULT_MODEL="$${OPENCODE_DEFAULT_MODEL:-auto}" python3 - <<'PY'
+import json
+import os
+
+path = "/home/coder/.opencode/opencode.json"
+requested = (os.environ.get("OPENCODE_DEFAULT_MODEL") or "auto").strip()
+
+if not os.path.exists(path):
+    raise SystemExit(0)
+
+with open(path, "r", encoding="utf-8") as f:
+    try:
+        data = json.load(f)
+    except Exception:
+        data = {}
+
+providers = data.get("provider", {}) if isinstance(data.get("provider"), dict) else {}
+litellm_models = (providers.get("litellm", {}) or {}).get("models", {}) if isinstance(providers.get("litellm", {}), dict) else {}
+freeapi_models = (providers.get("freeapi", {}) or {}).get("models", {}) if isinstance(providers.get("freeapi", {}), dict) else {}
+
+def first_model_key(models_obj):
+    if isinstance(models_obj, dict) and models_obj:
+        return next(iter(models_obj.keys()))
+    return ""
+
+if requested and requested.lower() != "auto":
+    selected_model = requested
+else:
+    if isinstance(freeapi_models, dict) and freeapi_models:
+        freeapi_default = "glm-5-ha" if "glm-5-ha" in freeapi_models else first_model_key(freeapi_models)
+        selected_model = f"freeapi/{freeapi_default}" if freeapi_default else ""
+    elif isinstance(litellm_models, dict) and litellm_models:
+        mks_default = "qwen3.5:27b" if "qwen3.5:27b" in litellm_models else first_model_key(litellm_models)
+        selected_model = f"litellm/{mks_default}" if mks_default else ""
+    else:
+        selected_model = ""
+
+if selected_model:
+    data["model"] = selected_model
+
+with open(path, "w", encoding="utf-8") as f:
+    json.dump(data, f, indent=2, ensure_ascii=False)
+PY
       ln -sf /home/coder/.opencode/opencode.json /home/coder/.opencode/config.json || true
+      python3 - <<'PY'
+import json, os
+import shutil
+home = os.path.expanduser("~")
+kicad_dir = os.path.join(home, ".local", "share", "mcp-servers", "kicad-mcp")
+gimp_dir = os.path.join(home, ".local", "share", "mcp-servers", "gimp-mcp")
+ink_launcher = os.path.join(home, ".local", "bin", "inkscape-mcp-launcher")
+mcp_servers = {
+  "blender": {"type": "local", "enabled": True, "command": ["uvx", "blender-mcp"]},
+  "freecad": {"type": "local", "enabled": True, "command": ["uvx", "freecad-mcp"]},
+  "kicad": {"type": "local", "enabled": True, "command": ["uv", "run", "--directory", kicad_dir, "main.py"]},
+  "gimp": {"type": "local", "enabled": True, "command": ["uv", "run", "--directory", gimp_dir, "gimp_mcp_server.py"]},
+  "inkscape": {"type": "local", "enabled": True, "command": [ink_launcher]},
+}
+for path in (os.path.join(home, ".opencode", "opencode.json"), os.path.join(home, ".config", "opencode", "opencode.json")):
+  if not os.path.exists(path):
+    continue
+  try:
+    with open(path, "r", encoding="utf-8") as f:
+      cfg = json.load(f)
+  except Exception:
+    cfg = {}
+  mcp_cfg = cfg.setdefault("mcp", {})
+  mcp_cfg.update(mcp_servers)
+  if shutil.which("coder") is None and "coder" in mcp_cfg:
+    mcp_cfg["coder"] = {"enabled": False}
+  with open(path, "w", encoding="utf-8") as f:
+    json.dump(cfg, f, indent=2)
+PY
       chown -R "$USER:$USER" /home/coder/.opencode || true
     fi
 
@@ -897,14 +1200,15 @@ EOT
     GIT_COMMITTER_NAME    = coalesce(data.coder_workspace_owner.me.full_name, data.coder_workspace_owner.me.name)
     GIT_COMMITTER_EMAIL   = data.coder_workspace_owner.me.email
     HOME                  = "/home/coder"
-    OPENCODE_PROVIDER_URL     = data.coder_parameter.opencode_provider_url.value
-    OPENCODE_API_KEY          = data.coder_parameter.opencode_api_key.value
+    OPENCODE_PROVIDER_URL     = ""
+    OPENCODE_API_KEY          = ""
+    OPENCODE_DEFAULT_MODEL    = local.opencode_default_model
     OPENCODE_DEFAULT_BASE_URL = local.opencode_default_base_url
     MKS_KEY_ENDPOINT          = local.mks_key_endpoint
     FREEAPI_BASE_URL          = local.freeapi_base_url
     FREEAPI_KEY_ENDPOINT      = local.freeapi_key_endpoint
-    MKS_BASE_URL              = data.coder_parameter.opencode_provider_url.value
-    MKS_API_KEY               = data.coder_parameter.opencode_api_key.value
+    MKS_BASE_URL              = ""
+    MKS_API_KEY               = ""
     AUTO_PROVISION_MKS_API_KEY = tostring(local.auto_provision_mks_key)
     AUTO_PROVISION_FREEAPI_API_KEY = tostring(local.auto_provision_freeapi_key)
     CODER_USER_EMAIL      = data.coder_workspace_owner.me.email
@@ -937,16 +1241,6 @@ EOT
 }
 
 # Módulos
-module "code-server" {
-  count      = data.coder_workspace.me.start_count
-  source     = "registry.coder.com/coder/code-server/coder"
-  version    = "~> 1.1"
-  agent_id   = coder_agent.main.id
-  folder     = "/home/coder/Projects"
-  extensions = local.vscode_extensions
-  order      = 1
-}
-
 module "kasmvnc" {
   count               = data.coder_workspace.me.start_count
   source              = "registry.coder.com/coder/kasmvnc/coder"

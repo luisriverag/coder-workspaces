@@ -67,7 +67,7 @@ data "coder_parameter" "enable_dri" {
   display_name = "[Compute] DRI (/dev/dri)"
   description  = "Mapea /dev/dri para aceleracion grafica (Intel/AMD o NVIDIA via EGL/GL)."
   type         = "bool"
-  default      = false
+  default      = true
   mutable      = true
 }
 
@@ -98,46 +98,10 @@ data "coder_parameter" "persist_projects_storage" {
   mutable      = true
 }
 
-data "coder_parameter" "host_mount_path" {
-  name         = "02_03_host_mount_path"
-  display_name = "[Storage] Montar ruta host en ~/host"
-  description  = "Ruta del host que se monta en /home/coder/host dentro del workspace."
-  type         = "string"
-  default      = ""
-  mutable      = true
-}
-
-data "coder_parameter" "host_mount_uid" {
-  name         = "02_04_host_mount_uid"
-  display_name = "[Storage] Especificar UID para montar la ruta host"
-  description  = "UID para ejecutar el contenedor cuando montas ~/host. Por defecto 1000."
-  type         = "string"
-  default      = "1000"
-  mutable      = true
-}
-
-data "coder_parameter" "opencode_provider_url" {
-  name         = "04_opencode_provider_url"
-  display_name = "[AI/OpenAI] Base URL (opcional)"
-  description  = "Base URL compatible con OpenAI (ej. https://api.tu-proveedor.com/v1)."
-  type         = "string"
-  default      = ""
-  mutable      = true
-}
-
-data "coder_parameter" "opencode_api_key" {
-  name         = "04_opencode_api_key"
-  display_name = "[AI/OpenAI] API key (opcional)"
-  description  = "API key para el proveedor OpenAI compatible."
-  type         = "string"
-  default      = ""
-  mutable      = true
-}
-
 data "coder_parameter" "autoprovision_mks_key" {
   name         = "04_autoprovision_mks_key"
-  display_name = "[AI/OpenCode] Provisionar API key MakeSpace automáticamente"
-  description  = "Genera y precarga una API key MakeSpace (30 días)."
+  display_name = "[AI/MakeSpace] Provisionar API key MakeSpace automáticamente"
+  description  = "Genera y precarga una API key MakeSpace. La API de MakeSpace es privada en los servidores de MakeSpace."
   type         = "bool"
   default      = true
   mutable      = true
@@ -146,7 +110,7 @@ data "coder_parameter" "autoprovision_mks_key" {
 data "coder_parameter" "autoprovision_freeapi_key" {
   name         = "04_autoprovision_freeapi_key"
   display_name = "[AI/FreeAPI] Provisionar API key automáticamente"
-  description  = "Si hay FREEAPI_BASE_URL/FREEAPI_KEY_ENDPOINT, solicita una key y configura FreeAPI en OpenCode."
+  description  = "Generar automaticamente una key con acceso a recursos gratis externos que pueden no ser privados."
   type         = "bool"
   default      = true
   mutable      = true
@@ -161,15 +125,6 @@ data "coder_parameter" "claude_token" {
   mutable      = true
 }
 
-data "coder_parameter" "vscode_extensions" {
-  name         = "06_vscode_extensions"
-  display_name = "[Code] Extensiones VS Code (preinstalar)"
-  description  = "Lista separada por comas de extensiones a preinstalar en VS Code/code-server."
-  type         = "string"
-  default      = join(", ", local.vscode_extensions_default)
-  mutable      = true
-}
-
 locals {
   username             = data.coder_workspace_owner.me.name
   workspace_image      = "codercom/enterprise-base:ubuntu"
@@ -177,8 +132,8 @@ locals {
   enable_dri           = data.coder_parameter.enable_dri.value
   persist_home_storage           = data.coder_parameter.persist_home_storage.value
   persist_projects_storage       = data.coder_parameter.persist_projects_storage.value
-  host_mount_path                = trimspace(data.coder_parameter.host_mount_path.value)
-  host_mount_uid                 = trimspace(data.coder_parameter.host_mount_uid.value)
+  host_mount_path                = ""
+  host_mount_uid                 = "1000"
   workspace_storage_root         = trimspace(var.users_storage)
   workspace_storage_home         = local.workspace_storage_root != "" ? "${local.workspace_storage_root}/${local.username}/${lower(data.coder_workspace.me.name)}" : ""
   workspace_storage_projects     = local.workspace_storage_root != "" ? "${local.workspace_storage_root}/${local.username}/${lower(data.coder_workspace.me.name)}/Projects" : ""
@@ -188,23 +143,12 @@ locals {
   mks_key_endpoint               = trimspace(var.mks_key_endpoint)
   freeapi_base_url               = trimspace(var.freeapi_base_url)
   freeapi_key_endpoint           = trimspace(var.freeapi_key_endpoint)
-  openai_base_url         = trimspace(data.coder_parameter.opencode_provider_url.value)
-  openai_api_key          = trimspace(data.coder_parameter.opencode_api_key.value)
+  openai_base_url         = ""
+  openai_api_key          = ""
   auto_provision_mks_key  = data.coder_parameter.autoprovision_mks_key.value
   auto_provision_freeapi_key = data.coder_parameter.autoprovision_freeapi_key.value
   claude_token            = trimspace(data.coder_parameter.claude_token.value)
   install_claude          = local.claude_token != ""
-  vscode_extensions_default = [
-    "coder.coder-remote",
-    "openai.chatgpt",
-    "Anthropic.claude-code",
-    "Continue.continue"
-  ]
-  vscode_extensions_input = trimspace(data.coder_parameter.vscode_extensions.value)
-  vscode_extensions = local.vscode_extensions_input != "" ? [
-    for ext in split(",", local.vscode_extensions_input) : trimspace(ext)
-    if trimspace(ext) != ""
-  ] : local.vscode_extensions_default
   continue_default_config = file("${path.module}/continue-config.yaml")
 }
 
@@ -299,16 +243,6 @@ for path in paths:
     with open(path, "w") as f:
         json.dump(data, f, indent=2)
 PY
-    if [ ! -f "$HOME/Projects/.vscode/extensions.json" ]; then
-      mkdir -p "$HOME/Projects/.vscode"
-      cat > "$HOME/Projects/.vscode/extensions.json" <<'VSCODEEXT'
-{
-  "recommendations": [
-${join(",\n", formatlist("    \"%s\"", local.vscode_extensions))}
-  ]
-}
-VSCODEEXT
-    fi
     mkdir -p ~/.opencode ~/.config/opencode
     if [ ! -f ~/.opencode/opencode.json ]; then
       cat > ~/.opencode/opencode.json <<'JSONCFG'
@@ -540,6 +474,24 @@ CONTINUECFG
       sudo DEBIAN_FRONTEND=noninteractive apt-get install -y gh
     fi
 
+    # Codex y Claude CLI (asegurar instalación en Minimal)
+    if ! command -v codex >/dev/null 2>&1 || ! command -v claude >/dev/null 2>&1; then
+      echo ">> Installing Codex CLI and Claude CLI..."
+      sudo install -m 0755 -d /etc/apt/keyrings
+      if [ ! -f /etc/apt/keyrings/nodesource.gpg ]; then
+        curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
+      fi
+      if [ ! -f /etc/apt/sources.list.d/nodesource.list ]; then
+        echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_22.x nodistro main" \
+          | sudo tee /etc/apt/sources.list.d/nodesource.list > /dev/null
+      fi
+      sudo apt-get update -y
+      sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends nodejs
+      sudo npm install -g --omit=dev --no-update-notifier --no-fund @openai/codex @anthropic-ai/claude-code
+      sudo npm cache clean --force || true
+      hash -r || true
+    fi
+
     # Docker Engine: instalar si falta y arrancar dockerd (DinD)
     if ! command -v dockerd >/dev/null 2>&1; then
       echo ">> Installing Docker (docker.io)..."
@@ -604,7 +556,6 @@ module "code-server" {
   source   = "registry.coder.com/coder/code-server/coder"
   version  = "~> 1.1"
   agent_id = coder_agent.main.id
-  extensions = local.vscode_extensions
   folder   = "/home/coder/Projects"
   order    = 1
 }

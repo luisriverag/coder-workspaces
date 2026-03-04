@@ -222,6 +222,20 @@ for path in paths:
     with open(path, "w") as f:
         json.dump(data, f, indent=2)
 PY
+    mkdir -p "$HOME/.codex"
+    touch "$HOME/.codex/config.toml"
+    if ! grep -q '^\[mcp_servers\.chrome-devtools\]' "$HOME/.codex/config.toml" 2>/dev/null; then
+      cat >> "$HOME/.codex/config.toml" <<'CODEXCFG'
+
+[mcp_servers.chrome-devtools]
+command = "bash"
+args = [
+  "-lc",
+  "DISPLAY=:1 XAUTHORITY=$HOME/.Xauthority npx -y chrome-devtools-mcp@latest"
+]
+enabled = true
+CODEXCFG
+    fi
     mkdir -p ~/.opencode ~/.config/opencode
     if [ ! -f ~/.opencode/opencode.json ]; then
       cat > ~/.opencode/opencode.json <<'JSONCFG'
