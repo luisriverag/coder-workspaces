@@ -208,7 +208,8 @@ if [ -x /opt/google/chrome/google-chrome ]; then
   cat > /usr/bin/google-chrome-stable <<'GCWRAP'
 #!/bin/sh
 exec /opt/google/chrome/google-chrome --no-sandbox --disable-gpu-sandbox --disable-setuid-sandbox \
-  --use-gl=swiftshader --enable-webgl --ignore-gpu-blocklist --disable-dev-shm-usage "$@"
+  --use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader \
+  --ignore-gpu-blocklist --disable-dev-shm-usage "$@"
 GCWRAP
   chmod +x /usr/bin/google-chrome-stable
   ln -sf google-chrome-stable /usr/bin/google-chrome 2>/dev/null || true
