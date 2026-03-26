@@ -35,6 +35,11 @@ variable "proxmox_api_url" {
 variable "proxmox_api_token_id" {
   type      = string
   sensitive = true
+
+  validation {
+    condition     = can(regex("^[^@]+@[^!]+![^=]+$", var.proxmox_api_token_id))
+    error_message = "proxmox_api_token_id must match '<user>@<realm>!<token>' (example: maker@pve!coder)."
+  }
 }
 
 variable "proxmox_api_token_secret" {
@@ -69,35 +74,61 @@ variable "proxmox_ssh_user" {
 variable "proxmox_node" {
   description = "Target Proxmox node"
   type        = string
-  default     = "pve"
+
+  validation {
+    condition     = length(trimspace(var.proxmox_node)) > 0
+    error_message = "proxmox_node must be set (example: caprica-virtual)."
+  }
 }
 variable "disk_storage" {
   description = "Disk storage (e.g., local-lvm)"
   type        = string
-  default     = "local-lvm"
+
+  validation {
+    condition     = length(trimspace(var.disk_storage)) > 0
+    error_message = "disk_storage must be set (example: host-ssd or local-lvm)."
+  }
 }
 
 variable "snippet_storage" {
   description = "Storage with Snippets content"
   type        = string
-  default     = "local"
+
+  validation {
+    condition     = length(trimspace(var.snippet_storage)) > 0
+    error_message = "snippet_storage must be set (example: local)."
+  }
 }
 
 variable "bridge" {
   description = "Bridge (e.g., vmbr0)"
   type        = string
-  default     = "vmbr0"
+
+  validation {
+    condition     = length(trimspace(var.bridge)) > 0
+    error_message = "bridge must be set (example: vmbr0)."
+  }
 }
 
 variable "vlan" {
   description = "VLAN tag (0 none)"
   type        = number
   default     = 0
+
+  validation {
+    condition     = var.vlan >= 0 && var.vlan <= 4094
+    error_message = "vlan must be between 0 and 4094."
+  }
 }
 
 variable "clone_template_vmid" {
   description = "VMID of the cloud-init base template to clone"
   type        = number
+
+  validation {
+    condition     = var.clone_template_vmid > 0
+    error_message = "clone_template_vmid must be a positive VMID (example: 999)."
+  }
 }
 
 data "coder_workspace" "me" {}
