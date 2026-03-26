@@ -314,6 +314,15 @@ env = { DISPLAY=":1", XAUTHORITY="/home/coder/.Xauthority" }
 enabled = true
 CODEXCFG
     fi
+    if ! grep -q '^\[mcp_servers\.docker\]' "$HOME/.codex/config.toml" 2>/dev/null; then
+      cat >> "$HOME/.codex/config.toml" <<'CODEXCFG'
+
+[mcp_servers.docker]
+command = "npx"
+args = ["-y", "@quantgeekdev/docker-mcp"]
+enabled = true
+CODEXCFG
+    fi
     mkdir -p ~/.opencode ~/.config/opencode
     if [ ! -f ~/.opencode/opencode.json ]; then
       cat > ~/.opencode/opencode.json <<'JSONCFG'
