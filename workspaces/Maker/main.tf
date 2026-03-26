@@ -228,23 +228,12 @@ PULSECFG
     done
     unset _pa_try
 
-    # Configurar Claude Code sandbox para contenedores Docker
-    # enableWeakerNestedSandbox evita "bwrap: Can't mount proc" en contenedores sin user namespaces
-    if ! grep -q '"enableWeakerNestedSandbox"' "$HOME/.claude/settings.json" 2>/dev/null; then
-      python3 - <<'PY' 2>/dev/null || true
-import json, os
-path = os.path.expanduser('~/.claude/settings.json')
-d = {}
-try:
-    with open(path) as f:
-        d = json.load(f)
-except Exception:
-    pass
-os.makedirs(os.path.dirname(path), exist_ok=True)
-d.setdefault('sandbox', {})['enableWeakerNestedSandbox'] = True
-with open(path, 'w') as f:
-    json.dump(d, f, indent=2)
-PY
+    # Configurar Claude Desktop cowork VM para usar HostBackend en Docker
+    # COWORK_VM_BACKEND=host evita que Claude Desktop use bwrap (que falla en contenedores)
+    # El contenedor Docker ya provee el aislamiento necesario
+    COWORK_TAG="# managed-by-maker-template: cowork-vm-backend"
+    if ! grep -qF "$COWORK_TAG" "$HOME/.xsessionrc" 2>/dev/null; then
+      printf '%s\nexport COWORK_VM_BACKEND=host\n' "$COWORK_TAG" >> "$HOME/.xsessionrc"
     fi
 
     if [ "${tostring(local.enable_dri)}" = "true" ]; then
