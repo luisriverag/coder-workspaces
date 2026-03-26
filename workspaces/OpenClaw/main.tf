@@ -224,15 +224,37 @@ for path in paths:
 PY
     mkdir -p "$HOME/.codex"
     touch "$HOME/.codex/config.toml"
+    # Migrar config antigua de chrome-devtools (formato bash -lc) si existe
+    python3 - <<'PY'
+import re, os
+path = os.path.expanduser("~/.codex/config.toml")
+try:
+    with open(path) as f:
+        content = f.read()
+except FileNotFoundError:
+    content = ""
+if "[mcp_servers.chrome-devtools]" in content and '"bash"' in content:
+    content = re.sub(r'\n*\[mcp_servers\.chrome-devtools\][^\[]*', '', content, flags=re.DOTALL)
+    with open(path, 'w') as f:
+        f.write(content.rstrip('\n') + '\n')
+PY
     if ! grep -q '^\[mcp_servers\.chrome-devtools\]' "$HOME/.codex/config.toml" 2>/dev/null; then
       cat >> "$HOME/.codex/config.toml" <<'CODEXCFG'
 
 [mcp_servers.chrome-devtools]
-command = "bash"
+command = "npx"
 args = [
-  "-lc",
-  "DISPLAY=:1 XAUTHORITY=$HOME/.Xauthority npx -y chrome-devtools-mcp@latest"
+  "-y",
+  "chrome-devtools-mcp@latest",
+  "--chrome-arg=--use-gl=angle",
+  "--chrome-arg=--use-angle=swiftshader",
+  "--chrome-arg=--enable-unsafe-swiftshader",
+  "--chrome-arg=--no-sandbox",
+  "--chrome-arg=--disable-gpu-sandbox",
+  "--chrome-arg=--disable-setuid-sandbox",
+  "--chrome-arg=--disable-dev-shm-usage",
 ]
+env = { DISPLAY=":1", XAUTHORITY="/home/coder/.Xauthority" }
 enabled = true
 CODEXCFG
     fi
