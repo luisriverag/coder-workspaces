@@ -169,6 +169,25 @@ PULSECFG
     done
     unset _pa_try
 
+    # Configurar Claude Code sandbox para contenedores Docker
+    # enableWeakerNestedSandbox evita "bwrap: Can't mount proc" en contenedores sin user namespaces
+    if ! grep -q '"enableWeakerNestedSandbox"' "$HOME/.claude/settings.json" 2>/dev/null; then
+      python3 - <<'PY' 2>/dev/null || true
+import json, os
+path = os.path.expanduser('~/.claude/settings.json')
+d = {}
+try:
+    with open(path) as f:
+        d = json.load(f)
+except Exception:
+    pass
+os.makedirs(os.path.dirname(path), exist_ok=True)
+d.setdefault('sandbox', {})['enableWeakerNestedSandbox'] = True
+with open(path, 'w') as f:
+    json.dump(d, f, indent=2)
+PY
+    fi
+
     # Asegurar /home/coder como HOME efectivo incluso si se ejecuta como root
     sudo mkdir -p /home/coder
     sudo chown "$USER:$USER" /home/coder || true
