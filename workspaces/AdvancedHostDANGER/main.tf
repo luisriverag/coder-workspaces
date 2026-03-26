@@ -1231,6 +1231,9 @@ resource "docker_container" "workspace" {
 
   # Para mejorar KasmVNC y navegadores
   shm_size = 2 * 1024 * 1024 * 1024
+  # seccomp=unconfined: necesario para bwrap (Claude Code/Desktop usan bwrap para sandbox bash)
+  # SYS_ADMIN solo no es suficiente; seccomp bloquea CLONE_NEWUSER incluso con esa capability
+  security_opts = ["seccomp=unconfined"]
   # Permitir FUSE/SSHFS y montajes remotos
   capabilities {
     add = ["SYS_ADMIN"]
