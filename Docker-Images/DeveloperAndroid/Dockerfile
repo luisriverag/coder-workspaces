@@ -150,23 +150,24 @@ RUN set -e; \
     rm -rf /var/lib/apt/lists/* /tmp/opencode-desktop.deb
 
 # Android SDK commandline tools + componentes principales
-ENV ANDROID_HOME=/opt/android-sdk \
-    ANDROID_SDK_ROOT=/opt/android-sdk \
+ENV ANDROID_HOME=/home/coder/Android/Sdk \
+    ANDROID_SDK_ROOT=/home/coder/Android/Sdk \
     ANDROID_USER_HOME=/home/coder/.android \
-    PATH=$PATH:/opt/android-sdk/platform-tools:/opt/android-sdk/cmdline-tools/latest/bin:/opt/android-sdk/emulator:/opt/gradle/gradle-9.3.1/bin
+    PATH=$PATH:/home/coder/Android/Sdk/platform-tools:/home/coder/Android/Sdk/cmdline-tools/latest/bin:/home/coder/Android/Sdk/emulator:/opt/gradle/gradle-9.3.1/bin
 
 ARG ANDROID_SDK_VERSION=14742923
-RUN mkdir -p /opt/android-sdk/cmdline-tools && \
+RUN mkdir -p /home/coder/Android/Sdk/cmdline-tools && \
     curl -fsSL "https://dl.google.com/android/repository/commandlinetools-linux-${ANDROID_SDK_VERSION}_latest.zip" -o /tmp/cmdline-tools.zip && \
-    unzip -q /tmp/cmdline-tools.zip -d /opt/android-sdk/cmdline-tools && \
-    mv /opt/android-sdk/cmdline-tools/cmdline-tools /opt/android-sdk/cmdline-tools/latest && \
+    unzip -q /tmp/cmdline-tools.zip -d /home/coder/Android/Sdk/cmdline-tools && \
+    mv /home/coder/Android/Sdk/cmdline-tools/cmdline-tools /home/coder/Android/Sdk/cmdline-tools/latest && \
     rm /tmp/cmdline-tools.zip && \
-    yes | /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses >/dev/null || true && \
-    /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager --update && \
-    /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager \
+    yes | /home/coder/Android/Sdk/cmdline-tools/latest/bin/sdkmanager --licenses >/dev/null || true && \
+    /home/coder/Android/Sdk/cmdline-tools/latest/bin/sdkmanager --update && \
+    /home/coder/Android/Sdk/cmdline-tools/latest/bin/sdkmanager \
       "platform-tools" \
       "emulator" && \
-    chown -R coder:coder /opt/android-sdk && \
+    ln -sfn /home/coder/Android/Sdk /opt/android-sdk && \
+    chown -R coder:coder /home/coder/Android /home/coder/.android && \
     install -d -o coder -g coder /home/coder/.android
 
 # Android Studio
