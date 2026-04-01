@@ -161,19 +161,16 @@ RUN mkdir -p /home/coder/Android/Sdk/cmdline-tools && \
       "platform-tools" \
       "emulator" && \
     mv /home/coder/Android/Sdk/emulator/emulator /home/coder/Android/Sdk/emulator/emulator.real && \
-    cat > /home/coder/Android/Sdk/emulator/emulator <<'EOF' && \
-#!/usr/bin/env bash
-set -e
-
-default_gpu="${ANDROID_EMULATOR_DEFAULT_GPU:-swiftshader}"
-for arg in "$@"; do
-  if [ "$arg" = "-gpu" ]; then
-    exec /home/coder/Android/Sdk/emulator/emulator.real "$@"
-  fi
-done
-
-exec /home/coder/Android/Sdk/emulator/emulator.real -gpu "$default_gpu" "$@"
-EOF
+    { \
+      printf '%s\n' '#!/usr/bin/env bash' 'set -e' ''; \
+      printf '%s\n' 'default_gpu="${ANDROID_EMULATOR_DEFAULT_GPU:-swiftshader}"'; \
+      printf '%s\n' 'for arg in "$@"; do'; \
+      printf '%s\n' '  if [ "$arg" = "-gpu" ]; then'; \
+      printf '%s\n' '    exec /home/coder/Android/Sdk/emulator/emulator.real "$@"'; \
+      printf '%s\n' '  fi'; \
+      printf '%s\n' 'done' ''; \
+      printf '%s\n' 'exec /home/coder/Android/Sdk/emulator/emulator.real -gpu "$default_gpu" "$@"'; \
+    } > /home/coder/Android/Sdk/emulator/emulator && \
     chmod +x /home/coder/Android/Sdk/emulator/emulator && \
     ln -sfn /home/coder/Android/Sdk /opt/android-sdk && \
     chown -R coder:coder /home/coder/Android /home/coder/.android && \
