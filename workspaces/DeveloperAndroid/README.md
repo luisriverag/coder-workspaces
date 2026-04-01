@@ -38,6 +38,7 @@ Workspace gráfico KDE/KasmVNC con toolchain Android preinstalado. Usa la imagen
 ## Notas
 - Escritorio KDE vía KasmVNC; VS Code (web y desktop) listo para configurar a tu gusto.
 - El SDK Android canónico del workspace es `/home/coder/Android/Sdk`; `/opt/android-sdk` queda como compatibilidad para tooling heredado.
+- El emulador Android usa `-gpu swiftshader` por defecto para evitar cierres con `-gpu host` en escritorios remotos; puedes sobrescribirlo con `ANDROID_EMULATOR_DEFAULT_GPU` o pasando `-gpu` manualmente.
 - Bloqueo de pantalla/ahorro de energía deshabilitado para no interrumpir builds largos.
 - Botones JetBrains disponibles en el dashboard (IntelliJ IDEA remoto); instala el plugin de Android para emular Android Studio y requiere JetBrains Gateway/Coder Desktop.
 - Home persistente en `/home/coder` (volumen o bind mount según parámetros); labels de Watchtower habilitadas.

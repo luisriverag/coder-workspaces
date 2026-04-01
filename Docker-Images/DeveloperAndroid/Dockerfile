@@ -65,13 +65,6 @@ RUN mkdir -p /etc/pulse/default.pa.d && \
     printf 'load-module module-null-sink sink_name=vcable sink_properties=device.description="VirtualCable"\nset-default-sink vcable\n' \
     > /etc/pulse/default.pa.d/10-null-sink.pa
 
-# Vulkan loader + Mesa Vulkan drivers (incluye Zink: OpenGL sobre Vulkan para NVIDIA en KasmVNC)
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        libvulkan1 \
-        mesa-vulkan-drivers \
-    && rm -rf /var/lib/apt/lists/*
-
 # GitHub CLI (repositorio oficial)
 RUN install -m 0755 -d /etc/apt/keyrings && \
     curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | gpg --dearmor -o /etc/apt/keyrings/githubcli-archive-keyring.gpg && \
@@ -152,6 +145,7 @@ RUN set -e; \
 # Android SDK commandline tools + componentes principales
 ENV ANDROID_HOME=/home/coder/Android/Sdk \
     ANDROID_SDK_ROOT=/home/coder/Android/Sdk \
+    ANDROID_EMULATOR_DEFAULT_GPU=swiftshader \
     ANDROID_USER_HOME=/home/coder/.android \
     PATH=$PATH:/home/coder/Android/Sdk/platform-tools:/home/coder/Android/Sdk/cmdline-tools/latest/bin:/home/coder/Android/Sdk/emulator:/opt/gradle/gradle-9.3.1/bin
 
@@ -166,6 +160,21 @@ RUN mkdir -p /home/coder/Android/Sdk/cmdline-tools && \
     /home/coder/Android/Sdk/cmdline-tools/latest/bin/sdkmanager \
       "platform-tools" \
       "emulator" && \
+    mv /home/coder/Android/Sdk/emulator/emulator /home/coder/Android/Sdk/emulator/emulator.real && \
+    cat > /home/coder/Android/Sdk/emulator/emulator <<'EOF' && \
+#!/usr/bin/env bash
+set -e
+
+default_gpu="${ANDROID_EMULATOR_DEFAULT_GPU:-swiftshader}"
+for arg in "$@"; do
+  if [ "$arg" = "-gpu" ]; then
+    exec /home/coder/Android/Sdk/emulator/emulator.real "$@"
+  fi
+done
+
+exec /home/coder/Android/Sdk/emulator/emulator.real -gpu "$default_gpu" "$@"
+EOF
+    chmod +x /home/coder/Android/Sdk/emulator/emulator && \
     ln -sfn /home/coder/Android/Sdk /opt/android-sdk && \
     chown -R coder:coder /home/coder/Android /home/coder/.android && \
     install -d -o coder -g coder /home/coder/.android

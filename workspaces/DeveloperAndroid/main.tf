@@ -258,46 +258,41 @@ PULSECFG
           fi
         fi
       done
-
-      # Activar aceleracion 3D en KasmVNC solo cuando la ruta GBM/DRI es viable.
-      # Nota: con driver NVIDIA propietario suele fallar con "Failed to create gbm".
-      mkdir -p "$HOME/.vnc"
-      KASM_USER_CFG="$HOME/.vnc/kasmvnc.yaml"
-      KASM_MANAGED_TAG="# managed-by-developerandroid-template: kasmvnc-hw3d"
-      HAS_RENDER_NODE=false
-      if [ -e /dev/dri/renderD128 ] && [ -r /dev/dri/renderD128 ] && [ -w /dev/dri/renderD128 ]; then
-        HAS_RENDER_NODE=true
-      fi
-      HAS_NVIDIA=false
-      if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi >/dev/null 2>&1; then
-        HAS_NVIDIA=true
-      fi
-
-      if [ "$HAS_RENDER_NODE" = "true" ] && [ "$HAS_NVIDIA" = "false" ]; then
-        cat > "$KASM_USER_CFG" <<'KASMGPUCFG'
-# managed-by-developerandroid-template: kasmvnc-hw3d
-desktop:
-  gpu:
-    hw3d: true
-    drinode: /dev/dri/renderD128
-KASMGPUCFG
-      elif [ "$HAS_NVIDIA" = "true" ]; then
-        # NVIDIA propietario: hw3d no soporta DRI3/GBM; configurar Zink (OpenGL→Vulkan→GPU)
-        if [ -f "$KASM_USER_CFG" ] && grep -qF "$KASM_MANAGED_TAG" "$KASM_USER_CFG"; then
-          rm -f "$KASM_USER_CFG"
-        fi
-        ZINK_TAG="# managed-by-developerandroid-template: zink-nvidia"
-        if ! grep -qF "$ZINK_TAG" "$HOME/.xsessionrc" 2>/dev/null; then
-          printf '%s\nexport MESA_LOADER_DRIVER_OVERRIDE=zink\nexport GALLIUM_DRIVER=zink\n' \
-            "$ZINK_TAG" >> "$HOME/.xsessionrc"
-        fi
-      else
-        # Sin render node accesible: limpiar config gestionada
-        if [ -f "$KASM_USER_CFG" ] && grep -qF "$KASM_MANAGED_TAG" "$KASM_USER_CFG"; then
-          rm -f "$KASM_USER_CFG"
-        fi
-      fi
     fi
+
+    # Revertir config gestionada de hw3d/zink en workspaces existentes.
+    mkdir -p "$HOME/.vnc"
+    KASM_USER_CFG="$HOME/.vnc/kasmvnc.yaml"
+    KASM_MANAGED_TAG="# managed-by-developerandroid-template: kasmvnc-hw3d"
+    if [ -f "$KASM_USER_CFG" ] && grep -qF "$KASM_MANAGED_TAG" "$KASM_USER_CFG"; then
+      rm -f "$KASM_USER_CFG"
+    fi
+    python3 - <<'PY'
+import os
+
+path = os.path.expanduser("~/.xsessionrc")
+tag = "# managed-by-developerandroid-template: zink-nvidia"
+try:
+    with open(path, encoding="utf-8") as f:
+        lines = f.readlines()
+except FileNotFoundError:
+    lines = []
+
+if lines:
+    cleaned = []
+    skip = 0
+    for line in lines:
+        if skip:
+            skip -= 1
+            continue
+        if line.rstrip("\n") == tag:
+            skip = 2
+            continue
+        cleaned.append(line)
+    if cleaned != lines:
+        with open(path, "w", encoding="utf-8") as f:
+            f.writelines(cleaned)
+PY
 
     # Asegurar /home/coder como HOME efectivo incluso si se ejecuta como root
     sudo mkdir -p /home/coder
