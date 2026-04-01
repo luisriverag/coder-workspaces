@@ -171,7 +171,9 @@ RUN mkdir -p /opt/android-sdk/cmdline-tools && \
 
 # Android Studio
 ARG ANDROID_STUDIO_VERSION=2025.3.2
-RUN curl -fsSL "https://redirector.gvt1.com/edgedl/android/studio/ide-zips/${ANDROID_STUDIO_VERSION}/android-studio-${ANDROID_STUDIO_VERSION}-linux.tar.gz" -o /tmp/android-studio.tar.gz && \
+ARG ANDROID_STUDIO_BUILD=2025.3.2.6
+ARG ANDROID_STUDIO_PACKAGE=android-studio-panda2-linux.tar.gz
+RUN curl -fsSL "https://redirector.gvt1.com/edgedl/android/studio/ide-zips/${ANDROID_STUDIO_BUILD}/${ANDROID_STUDIO_PACKAGE}" -o /tmp/android-studio.tar.gz && \
     tar -xzf /tmp/android-studio.tar.gz -C /opt && \
     rm /tmp/android-studio.tar.gz && \
     chown -R coder:coder /opt/android-studio && \
