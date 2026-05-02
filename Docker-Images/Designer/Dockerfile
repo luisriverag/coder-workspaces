@@ -140,6 +140,7 @@ curl -fsSL https://aaddrick.github.io/claude-desktop-debian/KEY.gpg | gpg --dear
 echo "deb [signed-by=/usr/share/keyrings/claude-desktop.gpg arch=amd64,arm64] https://aaddrick.github.io/claude-desktop-debian stable main" > /etc/apt/sources.list.d/claude-desktop.list
 apt-get update
 apt-get install -y --no-install-recommends claude-desktop
+rm -f /etc/apt/sources.list.d/claude-desktop.list /usr/share/keyrings/claude-desktop.gpg
 rm -rf /var/lib/apt/lists/*
 if [ -x /usr/share/claude-desktop/claude-desktop ] && [ -x /usr/bin/claude-desktop ]; then
   mv /usr/bin/claude-desktop /usr/bin/claude-desktop.real || true

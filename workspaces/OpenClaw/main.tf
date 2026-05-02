@@ -169,6 +169,14 @@ PULSECFG
     done
     unset _pa_try
 
+    # El repo comunitario de Claude Desktop ha empezado a redirigir HTTPS a HTTP,
+    # lo que rompe `apt-get update` en runtime. El paquete ya viene dentro de la imagen;
+    # desactivamos el source heredado para no bloquear el arranque del workspace.
+    if [ -f /etc/apt/sources.list.d/claude-desktop.list ] && \
+      grep -q 'aaddrick.github.io/claude-desktop-debian' /etc/apt/sources.list.d/claude-desktop.list 2>/dev/null; then
+      sudo mv /etc/apt/sources.list.d/claude-desktop.list /etc/apt/sources.list.d/claude-desktop.list.disabled || true
+    fi
+
     # Configurar Claude Desktop cowork VM para usar HostBackend en Docker
     # COWORK_VM_BACKEND=host evita que Claude Desktop use bwrap (que falla en contenedores)
     # El contenedor Docker ya provee el aislamiento necesario

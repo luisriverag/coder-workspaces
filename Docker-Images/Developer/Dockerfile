@@ -192,6 +192,7 @@ RUN set -e; \
     echo "deb [signed-by=/usr/share/keyrings/claude-desktop.gpg arch=amd64,arm64] https://aaddrick.github.io/claude-desktop-debian stable main" > /etc/apt/sources.list.d/claude-desktop.list; \
     apt-get update; \
     apt-get install -y --no-install-recommends /tmp/github-desktop.deb /tmp/opencode-desktop.deb claude-desktop; \
+    rm -f /etc/apt/sources.list.d/claude-desktop.list /usr/share/keyrings/claude-desktop.gpg; \
     rm -rf /var/lib/apt/lists/* /tmp/github-desktop.deb /tmp/opencode-desktop.deb
 
 # Electron apps dentro de contenedores Docker necesitan desactivar el sandbox
