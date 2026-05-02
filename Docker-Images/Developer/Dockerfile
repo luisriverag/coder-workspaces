@@ -188,6 +188,8 @@ RUN set -e; \
     fi; \
     curl -fsSL "$GH_DESKTOP_URL" -o /tmp/github-desktop.deb; \
     curl -fsSL "$OPENCODE_DESKTOP_URL" -o /tmp/opencode-desktop.deb; \
+    apt-get update && \
+    apt-get install -y --no-install-recommends gnome-keyring libwebkit2gtk-4.1-0 && \
     apt-get install -y --no-install-recommends /tmp/github-desktop.deb /tmp/opencode-desktop.deb; \
     if curl -fsSL https://aaddrick.github.io/claude-desktop-debian/KEY.gpg | gpg --dearmor -o /usr/share/keyrings/claude-desktop.gpg; then \
       echo "deb [signed-by=/usr/share/keyrings/claude-desktop.gpg arch=amd64,arm64] https://aaddrick.github.io/claude-desktop-debian stable main" > /etc/apt/sources.list.d/claude-desktop.list; \
