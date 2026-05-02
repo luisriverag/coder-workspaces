@@ -188,10 +188,15 @@ RUN set -e; \
     fi; \
     curl -fsSL "$GH_DESKTOP_URL" -o /tmp/github-desktop.deb; \
     curl -fsSL "$OPENCODE_DESKTOP_URL" -o /tmp/opencode-desktop.deb; \
-    curl -fsSL https://aaddrick.github.io/claude-desktop-debian/KEY.gpg | gpg --dearmor -o /usr/share/keyrings/claude-desktop.gpg; \
-    echo "deb [signed-by=/usr/share/keyrings/claude-desktop.gpg arch=amd64,arm64] https://aaddrick.github.io/claude-desktop-debian stable main" > /etc/apt/sources.list.d/claude-desktop.list; \
-    apt-get update; \
-    apt-get install -y --no-install-recommends /tmp/github-desktop.deb /tmp/opencode-desktop.deb claude-desktop; \
+    apt-get install -y --no-install-recommends /tmp/github-desktop.deb /tmp/opencode-desktop.deb; \
+    if curl -fsSL https://aaddrick.github.io/claude-desktop-debian/KEY.gpg | gpg --dearmor -o /usr/share/keyrings/claude-desktop.gpg; then \
+      echo "deb [signed-by=/usr/share/keyrings/claude-desktop.gpg arch=amd64,arm64] https://aaddrick.github.io/claude-desktop-debian stable main" > /etc/apt/sources.list.d/claude-desktop.list; \
+      if ! apt-get update || ! apt-get install -y --no-install-recommends claude-desktop; then \
+        echo "WARN: no se pudo instalar Claude Desktop desde el repo externo; se continua sin esa app" >&2; \
+      fi; \
+    else \
+      echo "WARN: no se pudo descargar la key de Claude Desktop; se continua sin esa app" >&2; \
+    fi; \
     rm -f /etc/apt/sources.list.d/claude-desktop.list /usr/share/keyrings/claude-desktop.gpg; \
     rm -rf /var/lib/apt/lists/* /tmp/github-desktop.deb /tmp/opencode-desktop.deb
 
